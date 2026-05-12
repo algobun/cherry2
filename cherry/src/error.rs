@@ -11,6 +11,13 @@ pub enum Error {
     #[error("file system error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("type mismatch error: {0}")]
+    TypeMismatch(String),
+
+
+    #[error("parse error: {0}")]
+    ParseError(String),
+
     /// Used when a provided parameter fails business logic validation.
     #[error("invalid parameter: {0}")]
     InvalidParam(String),

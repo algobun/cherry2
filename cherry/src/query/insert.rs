@@ -1,0 +1,72 @@
+use crate::executor::Executor;
+use crate::model::Model;
+use crate::query::column::{Assignment, Column};
+use crate::Result;
+
+pub struct InsertBuilder<'a, T> {
+    executor: Executor<'a>,
+    t: &'a T,
+    is_ignore: bool,
+}
+
+impl<'a, T: Model> InsertBuilder<'a, T> {
+
+    pub(crate) fn create(executor: Executor<'a>, t: &'a T) -> InsertBuilder<'a, T> {
+        InsertBuilder {
+            executor,
+            t,
+            is_ignore: false,
+        }
+    }
+
+
+    pub fn or_ignore(self) -> Insert<'a, T> {
+        Insert {
+            builder: self,
+        }
+    }
+
+    pub fn on_conflict<C>(self, col: Column<C>) -> InsertUpdate<'a, T, C> {
+        InsertUpdate {
+            builder: self,
+            col,
+            assignments: vec![],
+        }
+    }
+
+}
+
+
+pub struct Insert<'a, T> {
+    builder: InsertBuilder<'a, T>,
+}
+
+impl<T> Insert<'_, T> {
+
+    pub fn execute(self) -> Result<usize> {
+
+        todo!()
+    }
+}
+
+
+
+pub struct InsertUpdate<'a, T, C> {
+    builder: InsertBuilder<'a, T>,
+    col: Column<C>,
+    assignments: Vec<Assignment>,
+}
+
+impl<'a, T, C> InsertUpdate<'a, T, C> {
+
+    pub fn update(mut self, a: Assignment) -> Self {
+        self.assignments.push(a);
+        self
+    }
+
+    pub fn execute(self) -> Result<usize> {
+
+        todo!()
+    }
+
+}

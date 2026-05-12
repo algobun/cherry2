@@ -1,0 +1,21 @@
+[package]
+name = "cherry-derive"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+description.workspace = true
+
+[lib]
+#name = "cherry_derive"
+proc-macro = true
+
+#[features]
+
+[dependencies]
+proc-macro2.workspace = true
+syn.workspace = true
+quote.workspace = true
+heck.workspace = true

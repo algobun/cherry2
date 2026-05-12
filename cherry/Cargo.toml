@@ -1,0 +1,42 @@
+[package]
+name = "cherry"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+description.workspace = true
+readme = "../README.md"
+
+[lib]
+#required-features = []
+
+#[[test]]
+#name = "derive_test"
+#path = "tests/derive_test.rs"
+#required-features = ["mysql", "sqlite", "async-std"]
+
+#[[test]]
+#name = "insert_test"
+#path = "tests/insert_test.rs"
+#required-features = ["mysql", "sqlite", "chrono", "json", "async-std"]
+
+#[[test]]
+#name = "select_test"
+#path = "tests/select_test.rs"
+#required-features = ["mysql", "sqlite", "json", "async-std"]
+
+
+[dependencies]
+#anyhow.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+cherry-derive.workspace = true
+
+[dev-dependencies]
+
+
+
+#[features]
+

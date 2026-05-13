@@ -1,6 +1,7 @@
 use crate::executor::Executor;
-use crate::model::Model;
-use crate::query::column::{Assignment, Column};
+use crate::types::model::Model;
+use crate::ops::dsl::assignment::Assignment;
+use crate::ops::dsl::column::{Column};
 use crate::Result;
 
 pub struct InsertBuilder<'a, T> {

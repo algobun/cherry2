@@ -1,8 +1,8 @@
 use crate::executor::transaction::Transaction;
 use crate::executor::Executor;
-use crate::model::Model;
-use crate::query::insert::InsertBuilder;
-use crate::query::select::SelectBuilder;
+use crate::ops::insert::InsertBuilder;
+use crate::ops::select::SelectBuilder;
+use crate::types::model::Model;
 use crate::Result;
 use rusqlite::Connection;
 use std::path::Path;
@@ -29,19 +29,22 @@ impl Database {
         SelectBuilder::create(Executor::Connection(&self.conn))
     }
 
-    pub fn transaction_execute<F>(&mut self, f: F) -> Result<()>
+    pub fn transaction<F>(&mut self, f: F) -> Result<()>
     where
         F: FnOnce(&Transaction)
             -> Result<()> {
 
         let inner_tx = self.conn.transaction()?;
-        let tx = Transaction::create(Executor::Connection(&inner_tx));
+        let tx = Transaction::create(Executor::Transaction(&inner_tx));
 
         f(&tx)?;
 
         Ok(inner_tx.commit()?)
     }
 
+    // pub fn execute_sql(sql: &str) -> () {
+    //
+    // }
 
 }
 

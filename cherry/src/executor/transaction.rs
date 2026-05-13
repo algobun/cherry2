@@ -1,7 +1,7 @@
 use crate::executor::Executor;
-use crate::model::Model;
-use crate::query::insert::InsertBuilder;
-use crate::query::select::SelectBuilder;
+use crate::ops::insert::InsertBuilder;
+use crate::ops::select::SelectBuilder;
+use crate::types::model::Model;
 
 pub struct Transaction<'a> {
     executor: Executor<'a>

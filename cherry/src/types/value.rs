@@ -19,7 +19,6 @@ pub trait DbType: Sized {
 }
 
 
-
 impl ToSql for DbValue {
     fn to_sql(&self) -> RusqliteResult<ToSqlOutput<'_>> {
         match self {

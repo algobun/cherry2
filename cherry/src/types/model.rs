@@ -1,17 +1,12 @@
-use crate::types::row::Row;
+use crate::types::row::FromRow;
 use crate::types::value::DbValue;
-use crate::Result;
 
-pub trait Model: Sized {
-
+pub trait Model: FromRow {
     fn table_name() -> &'static str;
 
     fn columns() -> &'static [ColumnMeta];
 
     fn to_values(&self) -> Vec<(&'static str, DbValue)>;
-
-    /// Convert Row to the current model entity
-    fn from_row(row: &Row) -> Result<Self>;
 }
 
 #[derive(Copy, Clone)]
@@ -25,12 +20,47 @@ pub struct ColumnMeta {
 
 #[cfg(test)]
 mod tests {
-    use crate::Model;
+    // use crate::Model;
 
-    #[derive(Model)]
+    // use crate::model::Model;
+    // use cherry::model::{ColumnMeta, Row};
+    // use cherry::types::row::FromRow;
+    // use cherry::DbValue;
+    use cherry_derive::Model;
+
+    // #[derive(Model)]
     struct User {
         id: i64,
         name: String,
     }
+
+    #[derive(Model)]
+    struct Book {
+        id: usize,
+        title: String,
+    }
+
+    // impl FromRow for User {
+    //
+    //     fn from_row(row: &Row) -> cherry::Result<Self> {
+    //         todo!()
+    //     }
+    // }
+    //
+    // impl Model for User {
+    //     fn table_name() -> &'static str {
+    //         todo!()
+    //     }
+    //
+    //     fn columns() -> &'static [ColumnMeta] {
+    //         todo!()
+    //     }
+    //
+    //     fn to_values(&self) -> Vec<(&'static str, DbValue)> {
+    //         todo!()
+    //     }
+    // }
+
+
 
 }

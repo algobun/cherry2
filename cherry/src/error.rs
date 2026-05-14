@@ -22,6 +22,9 @@ pub enum Error {
     #[error("invalid parameter: {0}")]
     InvalidParam(String),
 
+    #[error("query error: {0}")]
+    QueryError(String),
+    
     /// Indicates that a requested record does not exist in the database.
     #[error("record not found (ID: {0})")]
     NotFound(i32),

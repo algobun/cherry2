@@ -9,32 +9,28 @@ pub(crate) mod ops;
 pub(crate) mod executor;
 
 pub use {
-    error::Error,
-
     cherry_derive::Model,
-    // types::model::Model,
-    // types::model::ColumnMeta,
-    types::model,
-    types::value::{DbType, DbValue},
-    types::row::Row,
-
+    error::Error,
     executor::database::Database,
     executor::transaction::Transaction,
+    types::value::{DbType, DbValue},
 };
 
-// pub mod model {
-//
-// }
+pub mod model {
+    pub use crate::types::model::{ColumnMeta, Model};
+    pub use crate::types::row::{FromRow, Row};
+}
 
 pub mod query {
     // CRUD
-    pub use crate::ops::{insert, select, update, delete};
+    pub use crate::ops::{delete, insert, select, update};
 
     // DSL
     pub mod dsl {
+        pub use crate::ops::dsl::assignment::Assignment;
         pub use crate::ops::dsl::column::Column;
         pub use crate::ops::dsl::condition::Condition;
-        pub use crate::ops::dsl::assignment::Assignment;
+        pub use crate::ops::dsl::order::{OrderBy, OrderDir};
     }
 }
 

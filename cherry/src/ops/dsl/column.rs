@@ -1,5 +1,6 @@
 use crate::ops::dsl::assignment::Assignment;
 use crate::ops::dsl::condition::Condition;
+use crate::ops::dsl::order::{OrderBy, OrderDir};
 use crate::types::value::DbType;
 use std::marker::PhantomData;
 
@@ -79,6 +80,14 @@ impl<T: DbType> Column<T> {
 
     pub fn contains(&self, value: impl Into<T>) -> Condition {
         Condition::Contains(self.name, value.into().to_db_value())
+    }
+
+    pub fn asc(&self) -> OrderBy {
+        OrderBy { column: self.name, direction: OrderDir::Asc }
+    }
+
+    pub fn desc(&self) -> OrderBy {
+        OrderBy { column: self.name, direction: OrderDir::Desc }
     }
 
     /// For regular `update`, such as AGE.set(18)

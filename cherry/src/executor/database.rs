@@ -13,8 +13,6 @@ pub struct Database {
 
 impl Database {
 
-    // pub const ABC: String = String::new();
-
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         Ok(Self {
             conn: Connection::open(path)?,
@@ -46,8 +44,4 @@ impl Database {
     //
     // }
 
-}
-
-fn a() {
-    // let a = Database::ABC.push_str("ab");
 }

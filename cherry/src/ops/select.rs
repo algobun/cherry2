@@ -50,9 +50,13 @@ impl<'a, T: Model> Select<'a, T> {
         self
     }
 
-    /// Filter condition: idempotent operation, direct override
+    /// Adds a `WHERE` condition to the update statement.
+    /// Calling this multiple times will automatically combine them with `AND`.
     pub fn filter(mut self, cond: Condition) -> Self {
-        self.condition = Some(cond);
+        self.condition = match self.condition {
+            Some(existing) => Some(existing & cond),
+            None => Some(cond),
+        };
         self
     }
 

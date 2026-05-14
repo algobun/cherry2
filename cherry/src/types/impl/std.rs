@@ -1,4 +1,4 @@
-use cherry::{DbType, DbValue, Result, Error};
+use cherry::{DbType, DbValue, Error, Result};
 
 // Batch implementation for various integer types
 macro_rules! impl_db_type_int {
@@ -20,7 +20,7 @@ macro_rules! impl_db_type_int {
 }
 
 // All integers mapping
-impl_db_type_int!(i8, u8, i16, u16, i32, u32, i64);
+impl_db_type_int!(i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 
 // For floating-point numbers

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 impl DbType for Uuid {
     fn to_db_value(&self) -> DbValue {
-        // UUID 转为 16 字节数组存入 Blob
+        // Convert UUID to 16-byte array and save to blob
         DbValue::Blob(self.as_bytes().to_vec())
     }
 
@@ -12,7 +12,7 @@ impl DbType for Uuid {
             DbValue::Blob(b) => {
                 Uuid::from_slice(&b).map_err(|e| Error::ParseError(e.to_string()))
             }
-            // 兼容有些用户手改数据库存成了 Text 的情况
+            // Compatible with the situation where some users manually change the database to Text
             DbValue::Text(s) => {
                 Uuid::parse_str(&s).map_err(|e| Error::ParseError(e.to_string()))
             }

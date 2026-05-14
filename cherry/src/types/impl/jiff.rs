@@ -10,8 +10,7 @@ impl DbType for Timestamp {
     fn from_db_value(value: DbValue) -> Result<Self> {
         match value {
             DbValue::Text(s) => {
-                s.parse::<Timestamp>()
-                    .map_err(|e| Error::ParseError(e.to_string()))
+                s.parse::<Timestamp>().map_err(|e| Error::ParseError(e.to_string()))
             }
             _ => Err(Error::TypeMismatch("Expected Text for jiff::Timestamp".into())),
         }

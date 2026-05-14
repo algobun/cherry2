@@ -2,7 +2,7 @@ use crate::{DbType, DbValue, Error, Result};
 
 impl DbType for serde_json::Value {
     fn to_db_value(&self) -> DbValue {
-        // 将 JSON 对象序列化为字符串存入 SQLite
+        // Serialize JSON objects as strings in SQLite
         DbValue::Text(self.to_string())
     }
 

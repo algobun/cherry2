@@ -1,5 +1,5 @@
 use crate::executor::Executor;
-use crate::ops::dsl::condition::Condition;
+use crate::ops::dsl::condition::{Condition, QueryContext};
 use crate::ops::dsl::order::{OrderBy, OrderDir};
 use crate::query::dsl::Column;
 use crate::types::model::Model;
@@ -7,8 +7,9 @@ use crate::types::row::{FromRow, Row};
 use crate::{DbValue, Result};
 use std::marker::PhantomData;
 
-pub struct SelectBuilder<'a, T> {
+pub struct Select<'a, T> {
     executor: Executor<'a>,
+    ctx: QueryContext,
     is_distinct: bool,
     selected_columns: Vec<&'static str>,
     condition: Option<Condition>,
@@ -20,11 +21,12 @@ pub struct SelectBuilder<'a, T> {
     _marker: PhantomData<T>,
 }
 
-impl<'a, T: Model> SelectBuilder<'a, T> {
+impl<'a, T: Model> Select<'a, T> {
 
     pub(crate) fn create(executor: Executor<'a>) -> Self {
         Self {
             executor,
+            ctx: QueryContext::Select,
             is_distinct: false,
             selected_columns: Vec::new(),
             condition: None,
@@ -100,7 +102,7 @@ impl<'a, T: Model> SelectBuilder<'a, T> {
 
         if let Some(cond) = &self.condition {
             sql.push_str(" where ");
-            cond.clone().build(&mut sql, &mut params); // 需要 Condition 派生 Clone
+            cond.clone().build(&mut sql, &mut params, self.ctx); // 需要 Condition 派生 Clone
         }
 
         if !self.group_bys.is_empty() {
@@ -110,7 +112,7 @@ impl<'a, T: Model> SelectBuilder<'a, T> {
 
         if let Some(having) = &self.having {
             sql.push_str(" having ");
-            having.clone().build(&mut sql, &mut params);
+            having.clone().build(&mut sql, &mut params, self.ctx);
         }
 
         if !self.order_bys.is_empty() {

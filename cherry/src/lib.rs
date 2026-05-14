@@ -23,7 +23,12 @@ pub mod model {
 
 pub mod query {
     // CRUD
-    pub use crate::ops::{delete, insert, select, update};
+    pub use crate::ops::{
+        delete,
+        insert::{Insert, InsertUpdate},
+        select::Select,
+        update
+    };
 
     // DSL
     pub mod dsl {

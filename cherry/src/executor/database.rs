@@ -1,7 +1,7 @@
 use crate::executor::transaction::Transaction;
 use crate::executor::Executor;
 use crate::ops::insert::Insert;
-use crate::ops::select::SelectBuilder;
+use crate::ops::select::Select;
 use crate::types::model::Model;
 use crate::Result;
 use rusqlite::Connection;
@@ -23,10 +23,12 @@ impl Database {
         Insert::create(Executor::Connection(&self.conn), t)
     }
 
-    pub fn select<T: Model>(&'_ self) -> SelectBuilder<'_, T> {
-        SelectBuilder::create(Executor::Connection(&self.conn))
+    pub fn select<T: Model>(&'_ self) -> Select<'_, T> {
+        Select::create(Executor::Connection(&self.conn))
     }
 
+    
+    
     pub fn transaction<F>(&mut self, f: F) -> Result<()>
     where
         F: FnOnce(&Transaction)

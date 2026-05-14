@@ -104,9 +104,9 @@ impl<T: DbType> Column<T> {
     pub fn excluded(&self) -> Assignment {
         Assignment::Excluded(self.name)
     }
-
-    /// Special for `on conflict do update set`, such as `AGE.excluded_increment(1)` or `AGE.excluded_increment(-1)`
-    pub fn excluded_increment(&self, value: impl Into<T>) -> Assignment {
-        Assignment::ExcludedIncrement(self.name, value.into().to_db_value())
-    }
+    
+    // /// Special for `on conflict do update set`, such as `AGE.excluded_increment(1)` or `AGE.excluded_increment(-1)`
+    // pub fn excluded_increment(&self, value: impl Into<T>) -> Assignment {
+    //     Assignment::ExcludedIncrement(self.name, value.into().to_db_value())
+    // }
 }

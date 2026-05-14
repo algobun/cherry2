@@ -1,6 +1,6 @@
 use crate::executor::Executor;
 use crate::ops::insert::Insert;
-use crate::ops::select::SelectBuilder;
+use crate::ops::select::Select;
 use crate::types::model::Model;
 
 pub struct Transaction<'a> {
@@ -17,8 +17,8 @@ impl<'a> Transaction<'a> {
         Insert::create(self.executor, t)
     }
 
-    pub fn select<T: Model>(&'_ self) -> SelectBuilder<'_, T> {
-        SelectBuilder::create(self.executor)
+    pub fn select<T: Model>(&'_ self) -> Select<'_, T> {
+        Select::create(self.executor)
     }
     
     

@@ -6,11 +6,15 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
     let crate_name = &model.crate_name;
     let struct_ident = &model.ident;
 
+    let mut meta_columns = Vec::new();
     let mut row_reads = Vec::new();
 
     for field in &model.fields {
         let field_ident = &field.ident;
+        // let field_ty = &field.ty;
         let col_name = &field.column_name;
+        let is_auto = field.is_autoincrement;
+        let is_ignore = field.is_ignored;
 
         // Handle the ignored fields
         if field.is_ignored {
@@ -19,6 +23,15 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
             });
             continue;
         }
+
+        meta_columns.push(quote! {
+            ::#crate_name::model::ColumnMeta {
+                name: #col_name,
+                is_ignore: #is_ignore,
+                is_autoincrement: #is_auto,
+            }
+        });
+
 
         row_reads.push(quote! {
             #field_ident: {
@@ -34,6 +47,11 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
     // Only generating `FromRow` implementation
     quote! {
         impl ::#crate_name::model::FromRow for #struct_ident {
+
+            fn columns() -> &'static [::#crate_name::model::ColumnMeta] {
+                &[ #(#meta_columns),* ]
+            }
+
             fn from_row(row: &::#crate_name::model::Row) -> ::#crate_name::Result<Self> {
                 ::#crate_name::Result::Ok(Self {
                     #(#row_reads),*
@@ -50,7 +68,7 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
     let table_name = &model.table_name;
 
     let mut const_columns = Vec::new();
-    let mut meta_columns = Vec::new();
+    // let mut meta_columns = Vec::new();
     let mut insert_values = Vec::new();
 
     for field in &model.fields {
@@ -62,7 +80,7 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
         let field_ty = &field.ty;
         let col_name = &field.column_name;
         let is_auto = field.is_autoincrement;
-        let is_ignore = field.is_ignored;
+        // let is_ignore = field.is_ignored;
 
         // Generate associated constants for columns
         let const_name = format_ident!("{}", field_ident.to_string().to_uppercase());
@@ -72,13 +90,13 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
         });
 
         // Generating metadata for columns
-        meta_columns.push(quote! {
-            ::#crate_name::model::ColumnMeta {
-                name: #col_name,
-                is_ignore: #is_ignore,
-                is_autoincrement: #is_auto,
-            }
-        });
+        // meta_columns.push(quote! {
+        //     ::#crate_name::model::ColumnMeta {
+        //         name: #col_name,
+        //         is_ignore: #is_ignore,
+        //         is_autoincrement: #is_auto,
+        //     }
+        // });
 
         // Filter the auto-increment columns' insert_values
         if !is_auto {
@@ -98,9 +116,9 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
                 #table_name
             }
 
-            fn columns() -> &'static [::#crate_name::model::ColumnMeta] {
-                &[ #(#meta_columns),* ]
-            }
+            // fn columns() -> &'static [::#crate_name::model::ColumnMeta] {
+            //     &[ #(#meta_columns),* ]
+            // }
 
             fn to_values(&self) -> ::std::vec::Vec<(&'static str, ::#crate_name::DbValue)> {
                 ::std::vec![ #(#insert_values),* ]

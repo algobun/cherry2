@@ -1,6 +1,6 @@
 use crate::executor::transaction::Transaction;
 use crate::executor::Executor;
-use crate::ops::insert::InsertBuilder;
+use crate::ops::insert::Insert;
 use crate::ops::select::SelectBuilder;
 use crate::types::model::Model;
 use crate::Result;
@@ -21,8 +21,8 @@ impl Database {
         })
     }
 
-    pub fn insert<'a, T: Model>(&'a self, t: &'a T) -> InsertBuilder<'a, T> {
-        InsertBuilder::create(Executor::Connection(&self.conn), t)
+    pub fn insert<'a, T: Model>(&'a self, t: &'a T) -> Insert<'a, T> {
+        Insert::create(Executor::Connection(&self.conn), t)
     }
 
     pub fn select<T: Model>(&'_ self) -> SelectBuilder<'_, T> {

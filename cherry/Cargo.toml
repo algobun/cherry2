@@ -18,9 +18,20 @@ rusqlite.workspace = true
 thiserror.workspace = true
 cherry-derive.workspace = true
 
-[dev-dependencies]
+chrono = { workspace = true, optional = true }
+time = { workspace = true, features = ["formatting", "parsing"], optional = true }
+jiff = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+uuid = {workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 
-
-#[features]
+[features]
+default = []
+chrono = ["dep:chrono"]
+time = ["dep:time"]
+jiff = ["dep:jiff"]
+json = ["dep:serde_json"]
+uuid = ["dep:uuid"]
+url = ["dep:url"]
 

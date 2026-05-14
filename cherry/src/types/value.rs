@@ -3,6 +3,12 @@ use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, 
 use rusqlite::Result as RusqliteResult;
 use std::str::from_utf8;
 
+pub trait DbType: Sized {
+    fn to_db_value(&self) -> DbValue;
+
+    fn from_db_value(value: DbValue) -> Result<Self>;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum DbValue {
     Null,
@@ -10,12 +16,6 @@ pub enum DbValue {
     Real(f64),
     Text(String),
     Blob(Vec<u8>),
-}
-
-pub trait DbType: Sized {
-    fn to_db_value(&self) -> DbValue;
-
-    fn from_db_value(value: DbValue) -> Result<Self>;
 }
 
 

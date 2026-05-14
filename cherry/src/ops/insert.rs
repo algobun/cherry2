@@ -4,56 +4,52 @@ use crate::ops::dsl::assignment::Assignment;
 use crate::ops::dsl::column::{Column};
 use crate::Result;
 
-pub struct InsertBuilder<'a, T> {
+pub struct Insert<'a, T> {
     executor: Executor<'a>,
     t: &'a T,
     is_ignore: bool,
 }
 
-impl<'a, T: Model> InsertBuilder<'a, T> {
+impl<'a, T: Model> Insert<'a, T> {
 
-    pub(crate) fn create(executor: Executor<'a>, t: &'a T) -> InsertBuilder<'a, T> {
-        InsertBuilder {
-            executor,
-            t,
-            is_ignore: false,
-        }
+    pub(crate) fn create(executor: Executor<'a>, t: &'a T) -> Insert<'a, T> {
+        Insert { executor, t, is_ignore: false }
     }
 
 
-    pub fn or_ignore(self) -> Insert<'a, T> {
-        Insert {
-            builder: self,
-        }
+    pub fn or_ignore(mut self) -> Self {
+        self.is_ignore = true;
+        self
     }
-
-    pub fn on_conflict<C>(self, col: Column<C>) -> InsertUpdate<'a, T, C> {
-        InsertUpdate {
-            builder: self,
-            col,
-            assignments: vec![],
-        }
-    }
-
-}
-
-
-pub struct Insert<'a, T> {
-    builder: InsertBuilder<'a, T>,
-}
-
-impl<T> Insert<'_, T> {
 
     pub fn execute(self) -> Result<usize> {
 
         todo!()
     }
+    
+    pub fn on_conflict<C>(self, col: Column<C>) -> InsertUpdate<'a, T, C> {
+        InsertUpdate { builder: self, col, assignments: vec![] }
+    }
+
 }
+
+
+// pub struct InsertIgnore<'a, T> {
+//     builder: Insert<'a, T>,
+// }
+// 
+// impl<T> InsertIgnore<'_, T> {
+// 
+//     pub fn execute(self) -> Result<usize> {
+// 
+//         todo!()
+//     }
+// }
 
 
 
 pub struct InsertUpdate<'a, T, C> {
-    builder: InsertBuilder<'a, T>,
+    builder: Insert<'a, T>,
     col: Column<C>,
     assignments: Vec<Assignment>,
 }

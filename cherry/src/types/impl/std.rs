@@ -65,10 +65,25 @@ impl DbType for bool {
     fn to_db_value(&self) -> DbValue {
         DbValue::Integer(if *self { 1 } else { 0 })
     }
-    fn from_db_value(value: DbValue) -> cherry::Result<Self> {
+    fn from_db_value(value: DbValue) -> Result<Self> {
         match value {
             DbValue::Integer(i) => Ok(i != 0),
             _ => Err(Error::TypeMismatch("Expected Integer for bool".into())),
+        }
+    }
+}
+
+
+impl DbType for Vec<u8> {
+    fn to_db_value(&self) -> DbValue {
+        // Direct cloning of internal data
+        DbValue::Blob(self.clone())
+    }
+
+    fn from_db_value(value: DbValue) -> Result<Self> {
+        match value {
+            DbValue::Blob(b) => Ok(b),
+            _ => Err(Error::TypeMismatch("Expected Blob for Vec<u8>".into())),
         }
     }
 }

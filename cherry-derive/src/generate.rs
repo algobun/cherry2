@@ -83,20 +83,12 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
         // let is_ignore = field.is_ignored;
 
         // Generate associated constants for columns
-        let const_name = format_ident!("{}", field_ident.to_string().to_uppercase());
+        let const_name = format_ident!("{}", field_ident.to_string());
         const_columns.push(quote! {
+            #[allow(non_upper_case_globals)]
             pub const #const_name: ::#crate_name::query::dsl::Column<#field_ty> =
                 ::#crate_name::query::dsl::Column::new(#col_name);
         });
-
-        // Generating metadata for columns
-        // meta_columns.push(quote! {
-        //     ::#crate_name::model::ColumnMeta {
-        //         name: #col_name,
-        //         is_ignore: #is_ignore,
-        //         is_autoincrement: #is_auto,
-        //     }
-        // });
 
         // Filter the auto-increment columns' insert_values
         if !is_auto {
@@ -115,10 +107,6 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
             fn table_name() -> &'static str {
                 #table_name
             }
-
-            // fn columns() -> &'static [::#crate_name::model::ColumnMeta] {
-            //     &[ #(#meta_columns),* ]
-            // }
 
             fn to_values(&self) -> ::std::vec::Vec<(&'static str, ::#crate_name::DbValue)> {
                 ::std::vec![ #(#insert_values),* ]

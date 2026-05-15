@@ -227,7 +227,7 @@ fn build_sql_and_params<T: Model>(
 
 /// A trait to extract column names for the SELECT clause.
 /// Strictly limited to `Column<T>` and tuples of `Column<T>` to ensure type safety.
-pub trait SelectedColumns {
+pub(crate) trait SelectedColumns {
     fn to_columns(&self) -> Vec<&'static str>;
 }
 

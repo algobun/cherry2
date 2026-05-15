@@ -318,7 +318,7 @@ pub(crate) enum Pattern {
 }
 
 /// A trait used to normalize single structs, arrays, or vectors into a slice.
-pub trait AsRows<'a, T> {
+pub(crate) trait AsRows<'a, T> {
     fn as_rows(&self) -> &'a [T];
 }
 
@@ -341,7 +341,7 @@ impl<'a, T> AsRows<'a, T> for &'a Vec<T> {
 }
 
 /// Defines valid targets for the `ON CONFLICT` clause.
-pub trait ConflictTarget {
+pub(crate) trait ConflictTarget {
     fn to_columns(&self) -> Vec<&'static str>;
 }
 

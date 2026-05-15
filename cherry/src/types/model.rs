@@ -4,8 +4,6 @@ use crate::types::value::DbValue;
 pub trait Model: FromRow {
     fn table_name() -> &'static str;
 
-    // fn columns() -> &'static [ColumnMeta];
-
     fn to_values(&self) -> Vec<(&'static str, DbValue)>;
 }
 
@@ -21,7 +19,7 @@ pub struct ColumnMeta {
 #[cfg(test)]
 mod tests {
     use crate::Model;
-    use crate::model::FromRow;
+    // use crate::model::FromRow;
     // use crate::model::Model;
     // use cherry::model::{ColumnMeta, Row};
     // use cherry::types::row::FromRow;
@@ -33,6 +31,11 @@ mod tests {
         id: i64,
         name: String,
     }
+
+    fn a() {
+
+    }
+
 
     // #[derive(Model)]
     struct Book {
@@ -64,9 +67,9 @@ mod tests {
     //     }
     // }
     
-    fn a() {
-        let a = User::columns();
-    }
+    // fn a() {
+    //     let a = User::columns();
+    // }
 
 
 

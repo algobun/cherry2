@@ -1,4 +1,5 @@
 // #![allow(unused_imports, deprecated, unused_must_use, unused_mut, unused_variables, dead_code, unreachable_code)]
+#![allow(private_bounds)]
 
 // For `mod tests` run proc macro `::cherry::...`, It means self.
 extern crate self as cherry;
@@ -25,9 +26,10 @@ pub mod query {
     // CRUD
     pub use crate::ops::{
         delete,
-        insert::{Insert, InsertUpdate},
-        select::Select,
-        update
+        insert,
+        select,
+        update,
+        raw,
     };
 
     // DSL

@@ -1,31 +1,33 @@
 use crate::executor::Executor;
-use crate::model::{FromRow, Row};
-use crate::ops::dsl::column::Column;
+use crate::model::{FromRow, Model};
+use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
 use crate::query::dsl::Condition;
-use crate::types::model::Model;
-use crate::{DbType, DbValue, Error, Result};
+use crate::{DbValue, Result};
 use rusqlite::params_from_iter;
 use std::marker::PhantomData;
 
-/// Represents the builder for a DELETE query.
-pub struct Delete<'a, T> {
+/// Represents a DELETE query builder with type-state.
+/// `S` tracks the returning state (NoReturning or Returning).
+pub struct Delete<'a, T, S = NoReturning> {
     executor: Executor<'a>,
     condition: Option<Condition>,
+    /// Core: generic field holding the necessary data for the current returning state.
+    returning: S,
     _marker: PhantomData<T>,
 }
 
-impl<'a, T: Model> Delete<'a, T> {
-
+impl<'a, T: Model> Delete<'a, T, NoReturning> {
     pub(crate) fn create(executor: Executor<'a>) -> Self {
         Self {
             executor,
             condition: None,
+            returning: NoReturning,
             _marker: PhantomData,
         }
     }
 
-    /// Adds a `WHERE` condition to the delete statement.
+    /// Adds a `WHERE` condition to the update statement.
     /// Calling this multiple times will automatically combine them with `AND`.
     pub fn filter(mut self, cond: Condition) -> Self {
         self.condition = match self.condition {
@@ -35,42 +37,37 @@ impl<'a, T: Model> Delete<'a, T> {
         self
     }
 
-    /// Compiles the AST into executable SQL and a parameter vector.
-    fn build_sql_and_params(&self, returning_suffix: Option<&str>) -> (String, Vec<DbValue>) {
-        let mut sql = String::from("delete from ");
-        sql.push_str(T::table_name());
-
-        let mut params = Vec::new();
-
-        if let Some(cond) = &self.condition {
-            sql.push_str(" where ");
-            // Pass the Delete context to the AST builder
-            cond.clone().build(&mut sql, &mut params, QueryContext::Delete);
+    /// State transition: Specifies single or multiple columns to return.
+    pub fn returning<C: ReturningColumns>(self, cols: C) -> Delete<'a, T, Returning<C::Output>> {
+        Delete {
+            executor: self.executor,
+            condition: self.condition,
+            returning: Returning::from_columns(cols),
+            _marker: PhantomData,
         }
-
-        if let Some(suffix) = returning_suffix {
-            sql.push_str(" returning ");
-            sql.push_str(suffix);
-        }
-
-        (sql, params)
     }
 
-    /// Executes the delete statement, returning the total number of affected rows.
-    ///
-    /// # Warning
-    /// If `.filter()` is not called, this will delete ALL rows in the table.
+    /// State transition: Specifies a DTO/Model to map the returned row into.
+    pub fn returning_as<U: FromRow>(self) -> Delete<'a, T, Returning<U>> {
+        Delete {
+            executor: self.executor,
+            condition: self.condition,
+            returning: Returning::from_row(),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Executes the query and returns the number of affected rows.
     pub fn execute(self) -> Result<usize> {
-        let (sql, params) = self.build_sql_and_params(None);
-        let conn = self.executor.conn();
-
-        let affected = conn.execute(&sql, params_from_iter(params))?;
-        Ok(affected)
+        let (sql, params) = build_sql_and_params::<T>(&self.condition, None);
+        Ok(self.executor.conn().execute(&sql, params_from_iter(params))?)
     }
+}
 
-    /// Executes the delete and returns a single strongly-typed column from the deleted rows.
-    pub fn returning<U: DbType>(self, col: Column<U>) -> Result<Vec<U>> {
-        let (sql, params) = self.build_sql_and_params(Some(col.name));
+impl<'a, T: Model, O> Delete<'a, T, Returning<O>> {
+    /// Executes the query and parses the returned dataset.
+    pub fn execute(self) -> Result<Vec<O>> {
+        let (sql, params) = build_sql_and_params::<T>(&self.condition, Some(&self.returning.projection));
         let conn = self.executor.conn();
 
         let mut stmt = conn.prepare(&sql)?;
@@ -78,30 +75,32 @@ impl<'a, T: Model> Delete<'a, T> {
 
         let mut result = Vec::new();
         while let Some(row) = rows.next()? {
-            let db_val: DbValue = row.get(0)
-                .map_err(|e| Error::QueryError(e.to_string()))?;
-            let val = U::from_db_value(db_val)?;
-            result.push(val);
+            result.push((self.returning.parser)(row)?);
         }
 
         Ok(result)
     }
+}
 
-    /// Executes the delete and projects the deleted rows into a specified DTO.
-    /// The target type `U` must implement `FromRow`.
-    pub fn returning_as<U: FromRow>(self) -> Result<Vec<U>> {
-        let cols = U::columns().iter().map(|c| c.name).collect::<Vec<_>>().join(", ");
-        let (sql, params) = self.build_sql_and_params(Some(&cols));
+/// Helper function to build the SQL string and collect parameters.
+fn build_sql_and_params<T: Model>(
+    condition: &Option<Condition>,
+    returning_projection: Option<&str>
+) -> (String, Vec<DbValue>) {
+    let mut sql = String::from("delete from ");
+    sql.push_str(T::table_name());
 
-        let conn = self.executor.conn();
-        let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query(params_from_iter(params))?;
+    let mut params = Vec::new();
 
-        let mut result = Vec::new();
-        while let Some(row) = rows.next()? {
-            result.push(U::from_row(&Row::new(row))?);
-        }
-
-        Ok(result)
+    if let Some(cond) = condition {
+        sql.push_str(" where ");
+        cond.clone().build(&mut sql, &mut params, QueryContext::Delete);
     }
+
+    if let Some(projection) = returning_projection {
+        sql.push_str(" returning ");
+        sql.push_str(projection);
+    }
+
+    (sql, params)
 }

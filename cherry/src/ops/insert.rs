@@ -1,23 +1,25 @@
 use crate::executor::Executor;
-use crate::model::{FromRow, Row};
+use crate::model::FromRow;
 use crate::ops::dsl::assignment::{build_assignments, Assignment};
 use crate::ops::dsl::column::Column;
+use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
 use crate::query::dsl::Condition;
 use crate::types::model::Model;
-use crate::{DbType, DbValue, Error, Result};
+use crate::{DbValue, Result};
 use rusqlite::params_from_iter;
 
 /// Represents the builder for an INSERT query.
-pub struct Insert<'a, T> {
+/// `S` tracks the returning state (NoReturning or Returning).
+pub struct Insert<'a, T, S = NoReturning> {
     pub(crate) executor: Executor<'a>,
     pub(crate) rows: &'a [T],
     pub(crate) pattern: Pattern,
+    pub(crate) returning: S,
 }
 
-impl<'a, T: Model> Insert<'a, T> {
-
-    pub(crate) fn create<M>(executor: Executor<'a>, m: M) -> Insert<'a, T>
+impl<'a, T: Model> Insert<'a, T, NoReturning> {
+    pub(crate) fn create<M>(executor: Executor<'a>, m: M) -> Self
     where
         M: AsRows<'a, T>,
     {
@@ -25,9 +27,40 @@ impl<'a, T: Model> Insert<'a, T> {
             executor,
             rows: m.as_rows(),
             pattern: Pattern::Normal,
+            returning: NoReturning,
         }
     }
 
+    /// State transition: Specifies single or multiple columns to return.
+    pub fn returning<C: ReturningColumns>(self, cols: C) -> Insert<'a, T, Returning<C::Output>> {
+        Insert {
+            executor: self.executor,
+            rows: self.rows,
+            pattern: self.pattern,
+            returning: Returning::from_columns(cols),
+        }
+    }
+
+    /// State transition: Specifies a DTO/Model to map the returned row into.
+    pub fn returning_as<U: FromRow>(self) -> Insert<'a, T, Returning<U>> {
+        Insert {
+            executor: self.executor,
+            rows: self.rows,
+            pattern: self.pattern,
+            returning: Returning::from_row(),
+        }
+    }
+
+    /// Executes the insert statement, returning the total number of affected rows.
+    /// Automatically chunks the execution to avoid SQLite's parameter limit.
+    pub fn execute(self) -> Result<usize> {
+        let chunks = self.generate_chunks();
+        execute_affected(self.executor, chunks)
+    }
+}
+
+// General methods (not affected by the Returning state)
+impl<'a, T: Model, S> Insert<'a, T, S> {
     /// Converts the statement to `insert or ignore into`
     pub fn or_ignore(mut self) -> Self {
         self.pattern = Pattern::OrIgnore;
@@ -40,9 +73,9 @@ impl<'a, T: Model> Insert<'a, T> {
         self
     }
 
-    /// Appends the `on conflict` clause, returning an InsertUpdate builder
-    /// which allows chaining `update` (for upsert) and `filter`.
-    pub fn on_conflict<Target: ConflictTarget>(self, target: Target) -> InsertUpdate<'a, T> {
+    /// Appends the `on conflict` clause, returning an InsertUpdate builder.
+    /// Passes down the current returning state.
+    pub fn on_conflict<Target: ConflictTarget>(self, target: Target) -> InsertUpdate<'a, T, S> {
         InsertUpdate {
             builder: self,
             conflict_cols: target.to_columns(),
@@ -51,45 +84,12 @@ impl<'a, T: Model> Insert<'a, T> {
         }
     }
 
-    /// Executes the insert statement, returning the total number of affected rows.
-    /// Automatically chunks the execution to avoid SQLite's 32766 parameter limit.
-    pub fn execute(self) -> Result<usize> {
-        let chunks = self.generate_chunks();
-        let conn = self.executor.conn();
-        let mut total_affected = 0;
-
-        for chunk in chunks {
-            total_affected += conn.execute(&chunk.base_sql, params_from_iter(chunk.params))?;
-        }
-
-        Ok(total_affected)
-    }
-
-    /// Executes the insert and returns a single column from the inserted rows.
-    /// Useful for fetching auto-incremented IDs (`returning(User::ID)`).
-    pub fn returning<U: DbType>(self, col: Column<U>) -> Result<Vec<U>> {
-        let chunks = self.generate_chunks();
-        let returning_suffix = format!(" returning {}", col.name);
-        execute_returning_column(self.executor, chunks, &returning_suffix)
-    }
-
-    /// Executes the insert and projects the returned rows into a specified DTO.
-    /// The target type `U` must implement `FromRow`.
-    pub fn returning_as<U: FromRow>(self) -> Result<Vec<U>> {
-        let chunks = self.generate_chunks();
-        let cols = U::columns().iter().map(|c| c.name).collect::<Vec<_>>().join(", ");
-        let returning_suffix = format!(" returning {}", cols);
-        execute_returning_as(self.executor, chunks, &returning_suffix)
-    }
-
-    // --- Private Helpers ---
-
     /// Generates executable chunks of SQL and parameters to bypass SQLite limits.
-    fn generate_chunks(&self) -> Vec<ChunkData> {
+    fn generate_chunks(&self) -> Vec<Chunk> {
         let mut chunks = Vec::new();
 
         if self.rows.is_empty() {
-            chunks.push(ChunkData {
+            chunks.push(Chunk {
                 base_sql: build_base_insert(self.pattern, T::table_name(), &[], 0),
                 params: vec![],
             });
@@ -103,7 +103,7 @@ impl<'a, T: Model> Insert<'a, T> {
         if cols_count == 0 {
             let sql = build_base_insert(self.pattern, T::table_name(), &[], 0);
             for _ in self.rows {
-                chunks.push(ChunkData { base_sql: sql.clone(), params: vec![] });
+                chunks.push(Chunk { base_sql: sql.clone(), params: vec![] });
             }
             return chunks;
         }
@@ -121,94 +121,32 @@ impl<'a, T: Model> Insert<'a, T> {
                     params.push(val);
                 }
             }
-            chunks.push(ChunkData { base_sql, params });
+            chunks.push(Chunk { base_sql, params });
         }
 
         chunks
     }
 }
 
-// --- Helper Structs & Functions ---
-
-struct ChunkData {
-    base_sql: String,
-    params: Vec<DbValue>,
-}
-
-fn build_base_insert(pattern: Pattern, table: &str, cols: &[&str], rows_count: usize) -> String {
-    let mut sql = String::new();
-    match pattern {
-        Pattern::Normal => sql.push_str("insert into "),
-        Pattern::OrIgnore => sql.push_str("insert or ignore into "),
-        Pattern::OrReplace => sql.push_str("insert or replace into "),
+// The `execute` contains returning data
+impl<'a, T: Model, O> Insert<'a, T, Returning<O>> {
+    /// Executes the insert and parses the returned dataset.
+    pub fn execute(self) -> Result<Vec<O>> {
+        let chunks = self.generate_chunks();
+        execute_returning(self.executor, chunks, &self.returning.projection, self.returning.parser)
     }
-    sql.push_str(table);
-
-    if cols.is_empty() || rows_count == 0 {
-        sql.push_str(" default values");
-        return sql;
-    }
-
-    sql.push_str(" (");
-    sql.push_str(&cols.join(", "));
-    sql.push_str(") values ");
-
-    let placeholders = format!("({})", vec!["?"; cols.len()].join(", "));
-    let all_placeholders = vec![placeholders.as_str(); rows_count].join(", ");
-    sql.push_str(&all_placeholders);
-
-    sql
-}
-
-/// Helper function to execute chunks and return a single column
-fn execute_returning_column<U: DbType>(executor: Executor<'_>, chunks: Vec<ChunkData>, returning_suffix: &str)
-                                       -> Result<Vec<U>> {
-    let conn = executor.conn();
-    let mut result = Vec::new();
-
-    for mut chunk in chunks {
-        chunk.base_sql.push_str(returning_suffix);
-        let mut stmt = conn.prepare(&chunk.base_sql)?;
-        let mut rows = stmt.query(params_from_iter(chunk.params))?;
-
-        while let Some(row) = rows.next()? {
-            let db_val: DbValue = row.get(0)
-                .map_err(|e| Error::QueryError(e.to_string()))?;
-            let val = U::from_db_value(db_val)?;
-            result.push(val);
-        }
-    }
-    Ok(result)
-}
-
-/// Helper function to execute chunks and project returned rows into a DTO
-fn execute_returning_as<U: FromRow>(executor: Executor<'_>, chunks: Vec<ChunkData>, returning_suffix: &str)
-                                    -> Result<Vec<U>> {
-    let conn = executor.conn();
-    let mut result = Vec::new();
-
-    for mut chunk in chunks {
-        chunk.base_sql.push_str(returning_suffix);
-        let mut stmt = conn.prepare(&chunk.base_sql)?;
-        let mut rows = stmt.query(params_from_iter(chunk.params))?;
-
-        while let Some(row) = rows.next()? {
-            result.push(U::from_row(&Row::new(row))?);
-        }
-    }
-    Ok(result)
 }
 
 /// Represents an INSERT ... ON CONFLICT builder (Upsert)
-pub struct InsertUpdate<'a, T> {
-    builder: Insert<'a, T>,
+/// Shares the returning state `S` with the base `Insert` builder.
+pub struct InsertUpdate<'a, T, S = NoReturning> {
+    builder: Insert<'a, T, S>,
     conflict_cols: Vec<&'static str>,
     assignments: Vec<Assignment>,
     condition: Option<Condition>,
 }
 
-impl<'a, T: Model> InsertUpdate<'a, T> {
-
+impl<'a, T: Model, S> InsertUpdate<'a, T, S> {
     /// Adds a `SET col = val` or `SET col = excluded.col` assignment
     pub fn update(mut self, a: Assignment) -> Self {
         self.assignments.push(a);
@@ -216,43 +154,17 @@ impl<'a, T: Model> InsertUpdate<'a, T> {
     }
 
     /// Adds a `WHERE` filter for the `DO UPDATE SET` action
+    /// Calling this multiple times will automatically combine them with `AND`.
     pub fn filter(mut self, cond: Condition) -> Self {
-        self.condition = Some(cond);
+        self.condition = match self.condition {
+            Some(existing) => Some(existing & cond),
+            None => Some(cond),
+        };
         self
     }
 
-    /// Executes the upsert statement
-    pub fn execute(self) -> Result<usize> {
-        let chunks = self.generate_upsert_chunks();
-        let conn = self.builder.executor.conn();
-        let mut total_affected = 0;
-
-        for chunk in chunks {
-            total_affected += conn.execute(&chunk.base_sql, params_from_iter(chunk.params))?;
-        }
-
-        Ok(total_affected)
-    }
-
-    /// Executes the upsert and returns a single column from the updated/inserted rows.
-    pub fn returning<U: DbType>(self, col: Column<U>) -> Result<Vec<U>> {
-        let chunks = self.generate_upsert_chunks();
-        let returning_suffix = format!(" returning {}", col.name);
-        execute_returning_column(self.builder.executor, chunks, &returning_suffix)
-    }
-
-    /// Executes the upsert and projects the returned rows into a specified DTO.
-    pub fn returning_as<U: FromRow>(self) -> Result<Vec<U>> {
-        let chunks = self.generate_upsert_chunks();
-        let cols = U::columns().iter().map(|c| c.name).collect::<Vec<_>>().join(", ");
-        let returning_suffix = format!(" returning {}", cols);
-        execute_returning_as(self.builder.executor, chunks, &returning_suffix)
-    }
-
-    // --- Private Helpers ---
-
     /// Generates base chunks and appends the `ON CONFLICT` clause to each of them.
-    fn generate_upsert_chunks(&self) -> Vec<ChunkData> {
+    fn generate_upsert_chunks(&self) -> Vec<Chunk> {
         let (suffix_sql, suffix_params) = self.build_upsert_suffix();
         let mut chunks = self.builder.generate_chunks();
 
@@ -288,6 +200,114 @@ impl<'a, T: Model> InsertUpdate<'a, T> {
 
         (sql, params)
     }
+}
+
+impl<'a, T: Model> InsertUpdate<'a, T, NoReturning> {
+    /// State transition: Specifies single or multiple columns to return.
+    pub fn returning<C: ReturningColumns>(self, cols: C) -> InsertUpdate<'a, T, Returning<C::Output>> {
+        InsertUpdate {
+            builder: self.builder.returning(cols), // Delegate to the inner builder
+            conflict_cols: self.conflict_cols,
+            assignments: self.assignments,
+            condition: self.condition,
+        }
+    }
+
+    /// State transition: Specifies a DTO/Model to map the returned row into.
+    pub fn returning_as<U: FromRow>(self) -> InsertUpdate<'a, T, Returning<U>> {
+        InsertUpdate {
+            builder: self.builder.returning_as::<U>(), // Delegate to the inner builder
+            conflict_cols: self.conflict_cols,
+            assignments: self.assignments,
+            condition: self.condition,
+        }
+    }
+
+    /// Executes the upsert statement, returning the total number of affected rows.
+    pub fn execute(self) -> Result<usize> {
+        let chunks = self.generate_upsert_chunks();
+        execute_affected(self.builder.executor, chunks)
+    }
+}
+
+impl<'a, T: Model, O> InsertUpdate<'a, T, Returning<O>> {
+    /// Executes the upsert and parses the returned dataset.
+    pub fn execute(self) -> Result<Vec<O>> {
+        let chunks = self.generate_upsert_chunks();
+        execute_returning(
+            self.builder.executor,
+            chunks,
+            &self.builder.returning.projection,
+            self.builder.returning.parser
+        )
+    }
+}
+
+// --- Shared Execution Helpers ---
+
+struct Chunk {
+    base_sql: String,
+    params: Vec<DbValue>,
+}
+
+/// Helper function to execute chunks without returning data (Result<usize>)
+fn execute_affected(executor: Executor<'_>, chunks: Vec<Chunk>) -> Result<usize> {
+    let conn = executor.conn();
+    let mut total_affected = 0;
+
+    for chunk in chunks {
+        total_affected += conn.execute(&chunk.base_sql, params_from_iter(chunk.params))?;
+    }
+
+    Ok(total_affected)
+}
+
+/// Helper function to execute chunks and parse returning data into type `O`
+fn execute_returning<O>(
+    executor: Executor<'_>,
+    chunks: Vec<Chunk>,
+    projection: &str,
+    parser: fn(&rusqlite::Row) -> Result<O>
+) -> Result<Vec<O>> {
+    let conn = executor.conn();
+    let mut result = Vec::new();
+    let returning_suffix = format!(" returning {}", projection);
+
+    for mut chunk in chunks {
+        chunk.base_sql.push_str(&returning_suffix);
+        let mut stmt = conn.prepare(&chunk.base_sql)?;
+        let mut rows = stmt.query(params_from_iter(chunk.params))?;
+
+        while let Some(row) = rows.next()? {
+            result.push(parser(row)?);
+        }
+    }
+    Ok(result)
+}
+
+fn build_base_insert(pattern: Pattern, table: &str, cols: &[&str], rows_count: usize) -> String {
+    let mut sql = String::new();
+    match pattern {
+        Pattern::Normal => sql.push_str("insert into "),
+        Pattern::OrIgnore => sql.push_str("insert or ignore into "),
+        Pattern::OrReplace => sql.push_str("insert or replace into "),
+    }
+    sql.push_str(table);
+
+    if cols.is_empty() || rows_count == 0 {
+        sql.push_str(" default values");
+        return sql;
+    }
+
+    sql.push_str(" (");
+    sql.push_str(&cols.join(", "));
+    sql.push_str(") values ");
+
+    let placeholders = format!("({})", vec!["?"; cols.len()].join(", "));
+    let all_placeholders = vec![placeholders.as_str(); rows_count].join(", ");
+    sql.push_str(&all_placeholders);
+
+    sql
 }
 
 #[derive(Copy, Clone)]

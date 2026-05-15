@@ -73,10 +73,11 @@ impl<'a, T: Model> Update<'a, T, NoReturning> {
     /// Executes the update statement, returning the total number of affected rows.
     pub fn execute(self) -> Result<usize> {
         let (sql, params) = build_sql_and_params::<T>(&self.assignments, &self.condition, None)?;
-        let conn = self.executor.conn();
-
-        let affected = conn.execute(&sql, params_from_iter(params))?;
-        Ok(affected)
+        self.executor.with_conn(|conn| {
+            let affected = conn.execute(&sql, params_from_iter(params))?;
+            Ok(affected)    
+        })
+        
     }
 }
 
@@ -89,16 +90,17 @@ impl<'a, T: Model, O> Update<'a, T, Returning<O>> {
             Some(&self.returning.projection)
         )?;
 
-        let conn = self.executor.conn();
-        let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query(params_from_iter(params))?;
+        self.executor.with_conn(|conn| {
+            let mut stmt = conn.prepare(&sql)?;
+            let mut rows = stmt.query(params_from_iter(params))?;
 
-        let mut result = Vec::new();
-        while let Some(row) = rows.next()? {
-            result.push((self.returning.parser)(row)?);
-        }
+            let mut result = Vec::new();
+            while let Some(row) = rows.next()? {
+                result.push((self.returning.parser)(row)?);
+            }
 
-        Ok(result)
+            Ok(result)    
+        })
     }
 }
 

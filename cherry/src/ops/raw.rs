@@ -55,24 +55,26 @@ impl<'a> Raw<'a> {
     /// Executes the raw SQL query, returning the number of affected rows.
     /// Typically used for `UPDATE`, `DELETE`, or `INSERT` statements.
     pub fn execute(self) -> Result<usize> {
-        let conn = self.executor.conn();
-        let affected = conn.execute(&self.sql, params_from_iter(self.params))?;
-        Ok(affected)
+        self.executor.with_conn(|conn| {
+            let affected = conn.execute(&self.sql, params_from_iter(self.params))?;
+            Ok(affected)    
+        })
     }
 
     /// Executes the raw SQL query and maps the returned dataset into a specified DTO.
     /// The target type `U` must implement `FromRow`.
     /// Typically used for `SELECT` or `RETURNING` statements.
     pub fn load_as<U: FromRow>(self) -> Result<Vec<U>> {
-        let conn = self.executor.conn();
-        let mut stmt = conn.prepare(&self.sql)?;
-        let mut rows = stmt.query(params_from_iter(self.params))?;
+        self.executor.with_conn(|conn| {
+            let mut stmt = conn.prepare(&self.sql)?;
+            let mut rows = stmt.query(params_from_iter(self.params))?;
 
-        let mut result = Vec::new();
-        while let Some(rusqlite_row) = rows.next()? {
-            result.push(U::from_row(&Row::new(rusqlite_row))?);
-        }
+            let mut result = Vec::new();
+            while let Some(rusqlite_row) = rows.next()? {
+                result.push(U::from_row(&Row::new(rusqlite_row))?);
+            }
 
-        Ok(result)
+            Ok(result)    
+        })
     }
 }

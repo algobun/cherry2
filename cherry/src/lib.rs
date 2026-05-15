@@ -8,11 +8,13 @@ pub(crate) mod error;
 pub(crate) mod types;
 pub(crate) mod ops;
 pub(crate) mod executor;
+mod database;
 
 pub use {
     cherry_derive::Model,
+    database::builder::DatabaseBuilder,
+    database::db::Database,
     error::Error,
-    executor::database::Database,
     executor::transaction::Transaction,
     types::value::{DbType, DbValue},
 };
@@ -24,13 +26,11 @@ pub mod model {
 
 pub mod query {
     // CRUD
-    pub use crate::ops::{
-        delete,
-        insert,
-        select,
-        update,
-        raw,
-    };
+    pub use crate::ops::delete::Delete;
+    pub use crate::ops::insert::{Insert, InsertUpdate};
+    pub use crate::ops::raw::Raw;
+    pub use crate::ops::select::Select;
+    pub use crate::ops::update::Update;
 
     // DSL
     pub mod dsl {

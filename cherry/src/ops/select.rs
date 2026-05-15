@@ -109,16 +109,17 @@ impl<'a, T: Model> Select<'a, T> {
             self.ctx.clone(),
         );
 
-        let conn = self.executor.conn();
-        let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query(rusqlite::params_from_iter(params))?;
+        self.executor.with_conn(|conn| {
+            let mut stmt = conn.prepare(&sql)?;
+            let mut rows = stmt.query(rusqlite::params_from_iter(params))?;
 
-        let mut result = Vec::new();
-        while let Some(rusqlite_row) = rows.next()? {
-            result.push(U::from_row(&Row::new(rusqlite_row))?);
-        }
+            let mut result = Vec::new();
+            while let Some(rusqlite_row) = rows.next()? {
+                result.push(U::from_row(&Row::new(rusqlite_row))?);
+            }
 
-        Ok(result)
+            Ok(result)
+        })
     }
 
     /// Quick count query. Overrides `columns`, `order_by`, `limit`, and `offset`.
@@ -139,14 +140,15 @@ impl<'a, T: Model> Select<'a, T> {
             self.ctx.clone(),
         );
 
-        let conn = self.executor.conn();
-        let count: i64 = conn.query_row(
-            &sql,
-            rusqlite::params_from_iter(params),
-            |r| r.get(0)
-        )?;
+        self.executor.with_conn(|conn| {
+            let count: i64 = conn.query_row(
+                &sql,
+                rusqlite::params_from_iter(params),
+                |r| r.get(0)
+            )?;
 
-        Ok(count as usize)
+            Ok(count as usize)
+        })
     }
 }
 

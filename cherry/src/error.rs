@@ -11,6 +11,9 @@ pub enum Error {
     #[error("file system error: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("connection error: {0}")]
+    ConnectionError(String),
+
     #[error("type mismatch error: {0}")]
     TypeMismatch(String),
 

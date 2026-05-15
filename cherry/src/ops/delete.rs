@@ -60,7 +60,7 @@ impl<'a, T: Model> Delete<'a, T, NoReturning> {
     /// Executes the query and returns the number of affected rows.
     pub fn execute(self) -> Result<usize> {
         let (sql, params) = build_sql_and_params::<T>(&self.condition, None);
-        Ok(self.executor.conn().execute(&sql, params_from_iter(params))?)
+        self.executor.with_conn(|conn| Ok(conn.execute(&sql, params_from_iter(params))?))
     }
 }
 
@@ -68,17 +68,16 @@ impl<'a, T: Model, O> Delete<'a, T, Returning<O>> {
     /// Executes the query and parses the returned dataset.
     pub fn execute(self) -> Result<Vec<O>> {
         let (sql, params) = build_sql_and_params::<T>(&self.condition, Some(&self.returning.projection));
-        let conn = self.executor.conn();
 
-        let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query(params_from_iter(params))?;
-
-        let mut result = Vec::new();
-        while let Some(row) = rows.next()? {
-            result.push((self.returning.parser)(row)?);
-        }
-
-        Ok(result)
+        self.executor.with_conn(|conn| {
+            let mut stmt = conn.prepare(&sql)?;
+            let mut rows = stmt.query(params_from_iter(params))?;
+            let mut result = Vec::new();
+            while let Some(row) = rows.next()? {
+                result.push((self.returning.parser)(row)?);
+            }
+            Ok(result)
+        })
     }
 }
 

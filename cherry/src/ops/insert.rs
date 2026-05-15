@@ -252,14 +252,14 @@ struct Chunk {
 
 /// Helper function to execute chunks without returning data (Result<usize>)
 fn execute_affected(executor: Executor<'_>, chunks: Vec<Chunk>) -> Result<usize> {
-    let conn = executor.conn();
-    let mut total_affected = 0;
-
-    for chunk in chunks {
-        total_affected += conn.execute(&chunk.base_sql, params_from_iter(chunk.params))?;
-    }
-
-    Ok(total_affected)
+    executor.with_conn(|conn| {
+        let mut total_affected = 0;
+        for chunk in chunks {
+            total_affected += conn.execute(&chunk.base_sql, params_from_iter(chunk.params))?;
+        }
+        Ok(total_affected)    
+    })
+    
 }
 
 /// Helper function to execute chunks and parse returning data into type `O`
@@ -269,20 +269,20 @@ fn execute_returning<O>(
     projection: &str,
     parser: fn(&rusqlite::Row) -> Result<O>
 ) -> Result<Vec<O>> {
-    let conn = executor.conn();
-    let mut result = Vec::new();
-    let returning_suffix = format!(" returning {}", projection);
+    executor.with_conn(|conn| {
+        let mut result = Vec::new();
+        let returning_suffix = format!(" returning {}", projection);
+        for mut chunk in chunks {
+            chunk.base_sql.push_str(&returning_suffix);
+            let mut stmt = conn.prepare(&chunk.base_sql)?;
+            let mut rows = stmt.query(params_from_iter(chunk.params))?;
 
-    for mut chunk in chunks {
-        chunk.base_sql.push_str(&returning_suffix);
-        let mut stmt = conn.prepare(&chunk.base_sql)?;
-        let mut rows = stmt.query(params_from_iter(chunk.params))?;
-
-        while let Some(row) = rows.next()? {
-            result.push(parser(row)?);
+            while let Some(row) = rows.next()? {
+                result.push(parser(row)?);
+            }
         }
-    }
-    Ok(result)
+        Ok(result)    
+    })
 }
 
 fn build_base_insert(pattern: Pattern, table: &str, cols: &[&str], rows_count: usize) -> String {

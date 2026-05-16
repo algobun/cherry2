@@ -20,8 +20,8 @@ pub use {
 };
 
 pub mod model {
-    pub use crate::types::model::{ColumnMeta, Model};
-    pub use crate::types::row::{FromRow, Row};
+    pub use crate::types::model::{ColumnMeta, FromRow, Model};
+    pub use crate::types::row::Row;
 }
 
 pub mod query {

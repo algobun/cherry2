@@ -1,9 +1,14 @@
-use crate::types::row::FromRow;
+use crate::types::row::Row;
 use crate::types::value::DbValue;
+use std::borrow::Cow;
+
+pub trait FromRow: Sized {
+    fn columns() -> Cow<'static, [ColumnMeta]>;
+    fn from_row(row: &Row) -> crate::Result<Self>;
+}
 
 pub trait Model: FromRow {
     fn table_name() -> &'static str;
-
     fn to_values(&self) -> Vec<(&'static str, DbValue)>;
 }
 

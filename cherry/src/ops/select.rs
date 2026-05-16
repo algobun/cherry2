@@ -2,16 +2,31 @@ use crate::executor::Executor;
 use crate::ops::dsl::condition::{Condition, QueryContext};
 use crate::ops::dsl::order::{OrderBy, OrderDir};
 use crate::query::dsl::Column;
-use crate::types::model::Model;
-use crate::types::row::{FromRow, Row};
+use crate::types::column::{SelectItem, SelectedColumns};
+use crate::types::model::{FromRow, Model};
+use crate::types::row::Row;
 use crate::{DbValue, Result};
 use std::marker::PhantomData;
+
+#[derive(Clone)]
+pub(crate) enum JoinType {
+    Inner,
+    Left,
+}
+
+#[derive(Clone)]
+pub(crate) struct JoinClause {
+    pub(crate) join_type: JoinType,
+    pub(crate) table_name: &'static str,
+    pub(crate) on_condition: Condition,
+}
 
 pub struct Select<'a, T> {
     executor: Executor<'a>,
     ctx: QueryContext,
     is_distinct: bool,
-    selected_columns: Vec<&'static str>,
+    selected_columns: Vec<SelectItem>,
+    joins: Vec<JoinClause>,
     condition: Option<Condition>,
     group_bys: Vec<&'static str>,
     having: Option<Condition>,
@@ -28,6 +43,7 @@ impl<'a, T: Model> Select<'a, T> {
             ctx: QueryContext::Select,
             is_distinct: false,
             selected_columns: Vec::new(),
+            joins: Vec::new(),
             condition: None,
             group_bys: Vec::new(),
             having: None,
@@ -47,6 +63,48 @@ impl<'a, T: Model> Select<'a, T> {
     /// Supports a single Column, a tuple of mixed Columns, or raw static strings.
     pub fn columns<C: SelectedColumns>(mut self, cols: C) -> Self {
         self.selected_columns = cols.to_columns();
+        self
+    }
+
+    /// Adds an `INNER JOIN` clause to the query.
+    ///
+    /// The target table name is automatically deduced from the generic `Model` parameter `M`.
+    ///
+    /// # Warning: Self-Joins
+    /// This method uses the static table name to construct column aliases
+    /// (e.g., `"table_name.column_name"`) to prevent column name conflicts between different tables.
+    /// As a result, **joining a table to itself (Self-Join) will inevitably cause table and alias collisions**,
+    /// leading to SQL syntax errors.
+    ///
+    /// If you need to perform a self-join or use highly complex alias mappings,
+    /// please fall back to the raw SQL interface (`db.raw(...)`).
+    pub fn inner_join<M: Model>(mut self, on: Condition) -> Self {
+        self.joins.push(JoinClause {
+            join_type: JoinType::Inner,
+            table_name: M::table_name(),
+            on_condition: on,
+        });
+        self
+    }
+
+    /// Adds a `LEFT JOIN` clause to the query.
+    ///
+    /// The target table name is automatically deduced from the generic `Model` parameter `M`.
+    ///
+    /// # Warning: Self-Joins
+    /// This method uses the static table name to construct column aliases
+    /// (e.g., `"table_name.column_name"`) to prevent column name conflicts between different tables.
+    /// As a result, **joining a table to itself (Self-Join) will inevitably cause table and alias collisions**,
+    /// leading to SQL syntax errors.
+    ///
+    /// If you need to perform a self-join or use highly complex alias mappings,
+    /// please fall back to the raw SQL interface (`db.raw(...)`).
+    pub fn left_join<M: Model>(mut self, on: Condition) -> Self {
+        self.joins.push(JoinClause {
+            join_type: JoinType::Left,
+            table_name: M::table_name(),
+            on_condition: on,
+        });
         self
     }
 
@@ -96,10 +154,20 @@ impl<'a, T: Model> Select<'a, T> {
     }
 
     /// Advanced Projection Query: Load as any structure `U` that implements `FromRow`.
-    pub fn load_as<U: FromRow>(self) -> Result<Vec<U>> {
+    pub fn load_as<U: FromRow>(mut self) -> Result<Vec<U>> {
+        // Filling Empty Columns
+        if self.selected_columns.is_empty() {
+            self.selected_columns = U::columns()
+                .into_owned()
+                .into_iter()
+                .map(SelectItem::Column)
+                .collect();
+        }
+
         let (sql, params) = build_sql_and_params::<T>(
             self.is_distinct,
             &self.selected_columns,
+            &self.joins,
             &self.condition,
             &self.group_bys,
             &self.having,
@@ -124,13 +192,14 @@ impl<'a, T: Model> Select<'a, T> {
 
     /// Quick count query. Overrides `columns`, `order_by`, `limit`, and `offset`.
     pub fn count(mut self) -> Result<usize> {
-        self.selected_columns = vec!["count(1)"];
+        self.selected_columns = vec![SelectItem::Raw("count(1)".into())];
         self.order_bys.clear();
         self.limit = None;
         self.offset = None;
         let (sql, params) = build_sql_and_params::<T>(
             self.is_distinct,
             &self.selected_columns,
+            &self.joins,
             &self.condition,
             &self.group_bys,
             &self.having,
@@ -155,7 +224,8 @@ impl<'a, T: Model> Select<'a, T> {
 /// Helper function to compile all collected AST fragments into executable SQL and parameters.
 fn build_sql_and_params<T: Model>(
     is_distinct: bool,
-    selected_columns: &[&str],
+    selected_columns: &[SelectItem],
+    joins: &[JoinClause],
     condition: &Option<Condition>,
     group_bys: &[&str],
     having: &Option<Condition>,
@@ -171,15 +241,30 @@ fn build_sql_and_params<T: Model>(
         sql.push_str("distinct ");
     }
 
-    let col_part = if selected_columns.is_empty() {
-        T::columns().iter().map(|c| c.column_name).collect::<Vec<_>>().join(", ")
-    } else {
-        selected_columns.join(", ")
-    };
+    // Different splicing strategies based on enumerated variants
+    let col_part = selected_columns.iter().map(|item| {
+        match item {
+            // Automatically add "table.column" as a conflict-resistant alias.
+            SelectItem::Column(c) => format!("{0}.{1} AS \"{0}.{1}\"", c.table_name, c.column_name),
+            SelectItem::Raw(raw_sql) => raw_sql.clone(), // e.g., "count(1)"
+        }
+    }).collect::<Vec<_>>().join(", ");
+
     sql.push_str(&col_part);
 
     sql.push_str(" from ");
     sql.push_str(T::table_name());
+
+    for join in joins {
+        match join.join_type {
+            JoinType::Inner => sql.push_str(" inner join "),
+            JoinType::Left => sql.push_str(" left join "),
+        }
+        sql.push_str(join.table_name);
+        sql.push_str(" on ");
+        // Use the Condition AST's build capability directly
+        join.on_condition.clone().build(&mut sql, &mut params, ctx.clone());
+    }
 
     if let Some(cond) = condition {
         sql.push_str(" where ");
@@ -225,60 +310,3 @@ fn build_sql_and_params<T: Model>(
 
     (sql, params)
 }
-
-
-/// A trait to extract column names for the SELECT clause.
-/// Strictly limited to `Column<T>` and tuples of `Column<T>` to ensure type safety.
-pub(crate) trait SelectedColumns {
-    fn to_columns(&self) -> Vec<&'static str>;
-}
-
-// Support for a single Column
-impl<T> SelectedColumns for Column<T> {
-    fn to_columns(&self) -> Vec<&'static str> {
-        vec![self.meta.column_name]
-    }
-}
-
-// Automatically implement the trait for tuples of mixed Column types
-macro_rules! impl_selected_columns_for_tuple {
-    ( $($T:ident),+ ) => {
-        // `$T` represents any type that implements `SelectedColumns`
-        impl<$($T: SelectedColumns),+> SelectedColumns for ($($T,)+) {
-            fn to_columns(&self) -> Vec<&'static str> {
-                #[allow(non_snake_case)]
-                let ($($T,)+) = self; // Deconstruct the tuple
-                let mut cols = Vec::new();
-                $( cols.extend($T.to_columns()); )+ // Collect all names
-                cols
-            }
-        }
-    };
-}
-
-// Support for up to 26 columns
-impl_selected_columns_for_tuple!(A, B);
-impl_selected_columns_for_tuple!(A, B, C);
-impl_selected_columns_for_tuple!(A, B, C, D);
-impl_selected_columns_for_tuple!(A, B, C, D, E);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
-impl_selected_columns_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);

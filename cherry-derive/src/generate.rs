@@ -50,8 +50,8 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
     quote! {
         impl ::#crate_name::model::FromRow for #struct_ident {
 
-            fn columns() -> &'static [::#crate_name::model::ColumnMeta] {
-                &[ #(#meta_columns),* ]
+            fn columns() -> std::borrow::Cow<'static, [::#crate_name::model::ColumnMeta]> {
+                std::borrow::Cow::Borrowed( &[ #(#meta_columns),* ] )
             }
 
             fn from_row(row: &::#crate_name::model::Row) -> ::#crate_name::Result<Self> {

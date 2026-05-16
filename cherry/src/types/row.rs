@@ -1,17 +1,9 @@
 use crate::Result;
-use cherry::model::ColumnMeta;
 use rusqlite::types::FromSql;
 use rusqlite::RowIndex;
 
-pub trait FromRow: Sized {
-    fn columns() -> &'static [ColumnMeta];
-
-    // Convert Row to the current model entity
-    fn from_row(row: &Row) -> Result<Self>;
-}
-
 pub struct Row<'a> {
-    inner: &'a rusqlite::Row<'a>,
+    pub(crate) inner: &'a rusqlite::Row<'a>,
 }
 
 impl<'a> Row<'a> {

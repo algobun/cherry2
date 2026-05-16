@@ -1,5 +1,5 @@
 use crate::model::{FromRow, Row};
-use crate::query::dsl::Column;
+use crate::ops::dsl::column::Column;
 use crate::{DbType, DbValue, Error, Result};
 
 /// Represents the default state where no data is returned from the query.
@@ -27,7 +27,7 @@ impl<O> Returning<O> {
 impl<O: FromRow> Returning<O> {
     /// Constructs `Returning` from a target model/DTO struct that implements `FromRow`.
     pub fn from_row() -> Self {
-        let cols = O::columns().iter().map(|c| c.name).collect::<Vec<_>>().join(", ");
+        let cols = O::columns().iter().map(|c| c.column_name).collect::<Vec<_>>().join(", ");
         Self {
             projection: cols,
             parser: |row| O::from_row(&Row::new(row)),
@@ -52,7 +52,7 @@ impl<U: DbType> ReturningColumns for Column<U> {
     type Output = U;
 
     fn projection(&self) -> String {
-        self.name.to_string()
+        self.meta.column_name.to_string()
     }
 
     fn parser() -> fn(&rusqlite::Row) -> Result<Self::Output> {
@@ -70,7 +70,7 @@ macro_rules! impl_returning_columns_for_tuple {
             type Output = ($( $T, )+);
 
             fn projection(&self) -> String {
-                vec![ $( self.$idx.name ),+ ].join(", ")
+                vec![ $( self.$idx.meta.column_name ),+ ].join(", ")
             }
 
             fn parser() -> fn(&rusqlite::Row) -> Result<Self::Output> {

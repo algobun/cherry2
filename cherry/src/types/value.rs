@@ -2,6 +2,7 @@ use crate::Result;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::Result as RusqliteResult;
 use std::str::from_utf8;
+use crate::model::ColumnMeta;
 
 pub trait DbType: Sized {
     fn to_db_value(&self) -> DbValue;
@@ -45,6 +46,34 @@ impl FromSql for DbValue {
         }
     }
 }
+
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Column(ColumnMeta),
+    Value(DbValue),
+}
+
+// Let the right value be either a specific value or another column
+pub trait IntoExpr {
+    fn into_expr(self) -> Expr;
+}
+
+// Implement IntoExpr for all columns
+impl IntoExpr for ColumnMeta {
+    fn into_expr(self) -> Expr {
+        Expr::Column(self)
+    }
+}
+
+// Implement IntoExpr for all base datatypes.
+impl<T: Into<DbValue>> IntoExpr for T {
+    fn into_expr(self) -> Expr {
+        Expr::Value(self.into())
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {

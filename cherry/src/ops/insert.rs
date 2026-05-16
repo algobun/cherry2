@@ -348,7 +348,7 @@ pub(crate) trait ConflictTarget {
 // implementation for single `Column<T>`
 impl<T> ConflictTarget for Column<T> {
     fn to_columns(&self) -> Vec<&'static str> {
-        vec![self.name]
+        vec![self.meta.column_name]
     }
 }
 

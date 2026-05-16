@@ -7,14 +7,18 @@ pub trait Model: FromRow {
     fn to_values(&self) -> Vec<(&'static str, DbValue)>;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct ColumnMeta {
-    pub(crate) name: &'static str,
+    pub(crate) table_name: &'static str,
+    pub(crate) column_name: &'static str,
     pub(crate) is_ignore: bool,
     pub(crate) is_autoincrement: bool,
     // pub(crate) is_primary_key: bool,
     // pub(crate) is_nullable: bool,
 }
+
+
+
 
 #[cfg(test)]
 mod tests {

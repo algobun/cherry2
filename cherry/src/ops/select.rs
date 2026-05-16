@@ -62,7 +62,7 @@ impl<'a, T: Model> Select<'a, T> {
 
     /// Adds a `group by` clause.
     pub fn group_by<C>(mut self, col: Column<C>) -> Self {
-        self.group_bys.push(col.name);
+        self.group_bys.push(col.meta.column_name);
         self
     }
 
@@ -172,7 +172,7 @@ fn build_sql_and_params<T: Model>(
     }
 
     let col_part = if selected_columns.is_empty() {
-        T::columns().iter().map(|c| c.name).collect::<Vec<_>>().join(", ")
+        T::columns().iter().map(|c| c.column_name).collect::<Vec<_>>().join(", ")
     } else {
         selected_columns.join(", ")
     };
@@ -204,7 +204,7 @@ fn build_sql_and_params<T: Model>(
             .map(|o| {
                 format!(
                     "{} {}",
-                    o.column,
+                    o.column.column_name,
                     match o.direction {
                         OrderDir::Asc => "asc",
                         OrderDir::Desc => "desc",
@@ -236,7 +236,7 @@ pub(crate) trait SelectedColumns {
 // Support for a single Column
 impl<T> SelectedColumns for Column<T> {
     fn to_columns(&self) -> Vec<&'static str> {
-        vec![self.name]
+        vec![self.meta.column_name]
     }
 }
 

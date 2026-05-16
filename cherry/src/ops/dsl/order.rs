@@ -1,3 +1,4 @@
+use crate::model::ColumnMeta;
 
 pub enum OrderDir {
     Asc,
@@ -5,6 +6,6 @@ pub enum OrderDir {
 }
 
 pub struct OrderBy {
-    pub column: &'static str,
+    pub column: ColumnMeta,
     pub direction: OrderDir,
 }

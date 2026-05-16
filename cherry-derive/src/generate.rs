@@ -5,6 +5,7 @@ use quote::{format_ident, quote};
 pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStream {
     let crate_name = &model.crate_name;
     let struct_ident = &model.ident;
+    let table_name = &model.table_name;
 
     let mut meta_columns = Vec::new();
     let mut row_reads = Vec::new();
@@ -26,7 +27,8 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
 
         meta_columns.push(quote! {
             ::#crate_name::model::ColumnMeta {
-                name: #col_name,
+                table_name: #table_name,
+                column_name: #col_name,
                 is_ignore: #is_ignore,
                 is_autoincrement: #is_auto,
             }
@@ -78,22 +80,29 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
 
         let field_ident = &field.ident;
         let field_ty = &field.ty;
-        let col_name = &field.column_name;
+        let column_name = &field.column_name;
         let is_auto = field.is_autoincrement;
-        // let is_ignore = field.is_ignored;
+        let is_ignore = field.is_ignored;
 
         // Generate associated constants for columns
         let const_name = format_ident!("{}", field_ident.to_string());
         const_columns.push(quote! {
             #[allow(non_upper_case_globals)]
             pub const #const_name: ::#crate_name::query::dsl::Column<#field_ty> =
-                ::#crate_name::query::dsl::Column::new(#col_name);
+                ::#crate_name::query::dsl::Column::new(
+                    ::#crate_name::model::ColumnMeta {
+                        table_name: #table_name,
+                        column_name: #column_name,
+                        is_ignore: #is_ignore,
+                        is_autoincrement: #is_auto,
+                    }
+                );
         });
 
         // Filter the auto-increment columns' insert_values
         if !is_auto {
             insert_values.push(quote! {
-                (#col_name, ::#crate_name::DbType::to_db_value(&self.#field_ident))
+                (#column_name, ::#crate_name::DbType::to_db_value(&self.#field_ident))
             });
         }
     }

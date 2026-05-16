@@ -1,19 +1,21 @@
+use crate::model::ColumnMeta;
 use crate::ops::dsl::assignment::Assignment;
 use crate::ops::dsl::condition::Condition;
+use crate::ops::dsl::condition::Operator;
 use crate::ops::dsl::order::{OrderBy, OrderDir};
-use crate::types::value::DbType;
+use crate::types::value::{DbType, IntoExpr};
 use std::marker::PhantomData;
 
 /// Database column definitions
 pub struct Column<T> {
-    pub(crate) name: &'static str,
+    pub(crate) meta: ColumnMeta,
     _marker: PhantomData<T>,
 }
 
 /// Unconstrained impl blocks, specialized for `const fn` constructors
 impl<T> Column<T> {
-    pub const fn new(name: &'static str) -> Self {
-        Self { name, _marker: PhantomData }
+    pub const fn new(meta: ColumnMeta) -> Self {
+        Self { meta, _marker: PhantomData }
     }
 }
 
@@ -21,92 +23,92 @@ impl<T> Column<T> {
 impl<T: DbType> Column<T> {
 
     pub fn eq(&self, value: impl Into<T>) -> Condition {
-        Condition::Eq(self.name, value.into().to_db_value())
+        Condition::Compare(self.meta, Operator::Eq, value.into().to_db_value().into_expr())
     }
 
     pub fn not_eq(&self, value: impl Into<T>) -> Condition {
-        Condition::NotEq(self.name, value.into().to_db_value())
+        Condition::Compare(self.meta, Operator::NotEq, value.into().to_db_value().into_expr())
     }
 
     pub fn gt(&self, value: impl Into<T>) -> Condition {
-        Condition::Gt(self.name, value.into().to_db_value())
+        Condition::Compare(self.meta, Operator::Gt, value.into().to_db_value().into_expr())
     }
 
     pub fn gte(&self, value: impl Into<T>) -> Condition {
-        Condition::Gte(self.name, value.into().to_db_value())
+        Condition::Compare(self.meta, Operator::Gte, value.into().to_db_value().into_expr())
     }
 
     pub fn lt(&self, value: impl Into<T>) -> Condition {
-        Condition::Lt(self.name, value.into().to_db_value())
+        Condition::Compare(self.meta, Operator::Lt, value.into().to_db_value().into_expr())
     }
 
     pub fn lte(&self, value: impl Into<T>) -> Condition {
-        Condition::Lte(self.name, value.into().to_db_value())
+        Condition::Compare(self.meta, Operator::Lte, value.into().to_db_value().into_expr())
     }
 
     pub fn is_null(&self) -> Condition {
-        Condition::IsNull(self.name)
+        Condition::IsNull(self.meta)
     }
 
     pub fn is_not_null(&self) -> Condition {
-        Condition::IsNotNull(self.name)
+        Condition::IsNotNull(self.meta)
     }
 
     pub fn in_list(&self, values: Vec<impl Into<T>>) -> Condition {
-        let db_values = values.into_iter().map(|v| v.into().to_db_value()).collect();
-        Condition::In(self.name, db_values)
+        let exprs = values.into_iter().map(|v| v.into().to_db_value().into_expr()).collect();
+        Condition::In(self.meta, exprs)
     }
 
     pub fn not_list(&self, values: Vec<impl Into<T>>) -> Condition {
-        let db_values = values.into_iter().map(|v| v.into().to_db_value()).collect();
-        Condition::NotIn(self.name, db_values)
+        let exprs = values.into_iter().map(|v| v.into().to_db_value().into_expr()).collect();
+        Condition::NotIn(self.meta, exprs)
     }
 
     pub fn between(&self, lower: impl Into<T>, upper: impl Into<T>) -> Condition {
-        Condition::Between(self.name, lower.into().to_db_value(),  upper.into().to_db_value())
+        Condition::Between(self.meta, lower.into().to_db_value().into_expr(),  upper.into().to_db_value().into_expr())
     }
 
     pub fn like(&self, value: impl Into<T>) -> Condition {
-        Condition::Like(self.name, value.into().to_db_value())
+        Condition::Like(self.meta, value.into().to_db_value().into_expr())
     }
 
     pub fn starts_with(&self, value: impl Into<T>) -> Condition {
-        Condition::StartsWith(self.name, value.into().to_db_value())
+        Condition::StartsWith(self.meta, value.into().to_db_value().into_expr())
     }
 
     pub fn ends_with(&self, value: impl Into<T>) -> Condition {
-        Condition::EndsWith(self.name, value.into().to_db_value())
+        Condition::EndsWith(self.meta, value.into().to_db_value().into_expr())
     }
 
     pub fn contains(&self, value: impl Into<T>) -> Condition {
-        Condition::Contains(self.name, value.into().to_db_value())
+        Condition::Contains(self.meta, value.into().to_db_value().into_expr())
     }
 
     pub fn asc(&self) -> OrderBy {
-        OrderBy { column: self.name, direction: OrderDir::Asc }
+        OrderBy { column: self.meta, direction: OrderDir::Asc }
     }
 
     pub fn desc(&self) -> OrderBy {
-        OrderBy { column: self.name, direction: OrderDir::Desc }
+        OrderBy { column: self.meta, direction: OrderDir::Desc }
     }
 
     /// For regular `update`, such as AGE.set(18)
     pub fn set(&self, value: impl Into<T>) -> Assignment {
-        Assignment::Value(self.name, value.into().to_db_value())
+        Assignment::Value(self.meta, value.into().to_db_value())
     }
 
     /// For regular `update` increment/decrement, such as `AGE.increment(1)` or `AGE.increment(-1)`
     pub fn increment(&self, value: impl Into<T>) -> Assignment {
-        Assignment::Increment(self.name, value.into().to_db_value())
+        Assignment::Increment(self.meta, value.into().to_db_value())
     }
 
     /// Special for `on conflict do update set`, such as `AGE.excluded()`
     pub fn excluded(&self) -> Assignment {
-        Assignment::Excluded(self.name)
+        Assignment::Excluded(self.meta)
     }
     
     // /// Special for `on conflict do update set`, such as `AGE.excluded_increment(1)` or `AGE.excluded_increment(-1)`
     // pub fn excluded_increment(&self, value: impl Into<T>) -> Assignment {
-    //     Assignment::ExcludedIncrement(self.name, value.into().to_db_value())
+    //     Assignment::ExcludedIncrement(self.meta, value.into().to_db_value())
     // }
 }

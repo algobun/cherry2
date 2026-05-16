@@ -35,13 +35,24 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
         });
 
 
+        let strict_col_name = format!("{}.{}", table_name, col_name);
+
         row_reads.push(quote! {
             #field_ident: {
-                let db_val = ::#crate_name::DbType::from_db_value(
-                    row.get(#col_name)
-                       .map_err(|e| ::#crate_name::Error::ParseError(e.to_string()))?
-                )?;
-                db_val
+                // Prioritize attempts to get strict column names with table name prefixes
+                // `table_name.column_name`
+                let val_res: ::std::result::Result<::#crate_name::DbValue, _> = row.get(#strict_col_name);
+
+                // Smart degradation to pure column name lookup if strict column name does not exist
+                // (for native `AS` alias or pure `DTO` scenarios)
+                let db_val = match val_res {
+                    ::std::result::Result::Ok(val) => val,
+                    ::std::result::Result::Err(_) => {
+                        row.get(#col_name).map_err(|e| ::#crate_name::Error::ParseError(e.to_string()))?
+                    }
+                };
+
+                ::#crate_name::DbType::from_db_value(db_val)?
             }
         });
     }

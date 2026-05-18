@@ -10,7 +10,7 @@ pub(crate) mod database;
 pub(crate) mod executor;
 pub(crate) mod ops;
 
-pub use cherry_derive::Model;
+pub use cherry_derive::{FromRow, Model};
 pub use error::Error;
 pub type Result<T, E = crate::error::Error> = std::result::Result<T, E>;
 
@@ -28,7 +28,7 @@ pub mod types {
     #[doc(hidden)]
     #[cfg(feature = "json")]
     pub mod json {
-        pub use crate::core::impls::json::{Json, from_db, to_db};
+        pub use crate::core::impls::json::{from_db, to_db, Json};
     }
 }
 

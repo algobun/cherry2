@@ -1,6 +1,7 @@
 use crate::model::ColumnMeta;
-pub use crate::ops::dsl::QueryContext;
-use crate::types::value::{DbValue, Expr};
+use crate::ops::dsl::QueryContext;
+use crate::types::value::{CondExpr, Value};
+use crate::{Error, Result};
 use std::ops::{BitAnd, BitOr};
 
 /// SQL Binary Operators.
@@ -32,19 +33,19 @@ impl Operator {
 pub enum Condition {
     /// Consolidated binary comparison (e.g., col = expr, col > expr).
     /// Drastically reduces the number of AST variants.
-    Compare(ColumnMeta, Operator, Expr),
+    Compare(ColumnMeta, Operator, CondExpr),
 
     IsNull(ColumnMeta),
     IsNotNull(ColumnMeta),
 
-    In(ColumnMeta, Vec<Expr>),
-    NotIn(ColumnMeta, Vec<Expr>),
-    Between(ColumnMeta, Expr, Expr),
+    In(ColumnMeta, Vec<CondExpr>),
+    NotIn(ColumnMeta, Vec<CondExpr>),
+    Between(ColumnMeta, CondExpr, CondExpr),
 
-    Like(ColumnMeta, Expr),
-    StartsWith(ColumnMeta, Expr),
-    EndsWith(ColumnMeta, Expr),
-    Contains(ColumnMeta, Expr),
+    Like(ColumnMeta, CondExpr),
+    StartsWith(ColumnMeta, CondExpr),
+    EndsWith(ColumnMeta, CondExpr),
+    Contains(ColumnMeta, CondExpr),
 
     // Nested logical combinations
     And(Box<Condition>, Box<Condition>),
@@ -69,10 +70,11 @@ impl BitOr for Condition {
 
 impl Condition {
     /// Recursively traverses the AST to build the SQL expression and bind parameters.
-    pub(crate) fn build(self, sql: &mut String, params: &mut Vec<DbValue>, ctx: QueryContext) {
+    pub(crate) fn build(self, sql: &mut String, params: &mut Vec<Value>, ctx: QueryContext) -> Result<()> {
         // Delegate to a dedicated Writer to eliminate redundant parameter passing.
         let mut writer = SqlWriter { sql, params, ctx };
-        writer.write_cond(self);
+        writer.write_cond(self)?;
+        Ok(())
     }
 }
 
@@ -83,25 +85,25 @@ impl Condition {
 /// Encapsulates SQL building context to vastly improve cohesion.
 struct SqlWriter<'a> {
     sql: &'a mut String,
-    params: &'a mut Vec<DbValue>,
+    params: &'a mut Vec<Value>,
     ctx: QueryContext,
 }
 
 impl<'a> SqlWriter<'a> {
-    fn write_cond(&mut self, cond: Condition) {
+    fn write_cond(&mut self, cond: Condition) -> Result<()> {
         match cond {
             // Consolidated standard binary operations
-            Condition::Compare(col, op, expr) => self.write_binary(&col, op, expr),
+            Condition::Compare(col, op, expr) => self.write_binary(&col, op, expr)?,
 
             // Range checks
-            Condition::In(col, exprs) => self.write_in(&col, exprs, true),
-            Condition::NotIn(col, exprs) => self.write_in(&col, exprs, false),
+            Condition::In(col, exprs) => self.write_in(&col, exprs, true)?,
+            Condition::NotIn(col, exprs) => self.write_in(&col, exprs, false)?,
             Condition::Between(col, val1, val2) => {
                 self.write_col(&col);
                 self.sql.push_str(" between ");
-                self.write_expr(val1);
+                self.write_expr(val1)?;
                 self.sql.push_str(" and ");
-                self.write_expr(val2);
+                self.write_expr(val2)?;
             }
 
             // NULL checks
@@ -115,15 +117,16 @@ impl<'a> SqlWriter<'a> {
             }
 
             // Wildcard matching
-            Condition::Like(col, expr) => self.write_wildcard(&col, expr, "", ""),
-            Condition::StartsWith(col, expr) => self.write_wildcard(&col, expr, "", "%"),
-            Condition::EndsWith(col, expr) => self.write_wildcard(&col, expr, "%", ""),
-            Condition::Contains(col, expr) => self.write_wildcard(&col, expr, "%", "%"),
+            Condition::Like(col, expr) => self.write_wildcard(&col, expr, "", "")?,
+            Condition::StartsWith(col, expr) => self.write_wildcard(&col, expr, "", "%")?,
+            Condition::EndsWith(col, expr) => self.write_wildcard(&col, expr, "%", "")?,
+            Condition::Contains(col, expr) => self.write_wildcard(&col, expr, "%", "%")?,
 
             // Logical tree traversal
-            Condition::And(left, right) => self.write_logic(" and ", *left, *right),
-            Condition::Or(left, right) => self.write_logic(" or ", *left, *right),
+            Condition::And(left, right) => self.write_logic(" and ", *left, *right)?,
+            Condition::Or(left, right) => self.write_logic(" or ", *left, *right)?,
         }
+        Ok(())
     }
 
     /// Appends the properly formatted column name based on context 
@@ -142,40 +145,44 @@ impl<'a> SqlWriter<'a> {
     }
 
     /// Resolves an Expression, securely binding values or formatting column projections.
-    fn write_expr(&mut self, expr: Expr) {
+    fn write_expr(&mut self, expr: CondExpr) -> Result<()> {
         match expr {
-            Expr::Column(meta) => self.write_col(&meta),
-            Expr::Value(val) => {
+            CondExpr::Column(meta) => self.write_col(&meta),
+            CondExpr::Value(val) => {
                 self.sql.push('?');
                 self.params.push(val);
             }
+            CondExpr::Error(e) => return Err(Error::ConversionError(e))
         }
+        Ok(())
     }
 
     /// Handles standard binary comparison operations.
-    fn write_binary(&mut self, col: &ColumnMeta, op: Operator, expr: Expr) {
+    fn write_binary(&mut self, col: &ColumnMeta, op: Operator, expr: CondExpr) -> Result<()> {
         self.write_col(col);
         self.sql.push_str(op.as_str());
-        self.write_expr(expr);
+        self.write_expr(expr)?;
+        Ok(())
     }
 
     /// Handles nested logical combinations with proper grouping.
-    fn write_logic(&mut self, op: &str, left: Condition, right: Condition) {
+    fn write_logic(&mut self, op: &str, left: Condition, right: Condition) -> Result<()> {
         self.sql.push('(');
-        self.write_cond(left);
+        self.write_cond(left)?;
         self.sql.push_str(op);
-        self.write_cond(right);
+        self.write_cond(right)?;
         self.sql.push(')');
+        Ok(())
     }
 
     /// Handles IN and NOT IN clauses, preventing syntax errors on empty lists.
-    fn write_in(&mut self, col: &ColumnMeta, exprs: Vec<Expr>, is_in: bool) {
+    fn write_in(&mut self, col: &ColumnMeta, exprs: Vec<CondExpr>, is_in: bool) -> Result<()> {
         self.write_col(col);
         if exprs.is_empty() {
             // Failsafe for empty `IN ()` arrays to prevent SQL syntax errors.
             let fallback = if is_in { " in (select 1 where 0)" } else { " not in (select 1 where 0)" };
             self.sql.push_str(fallback);
-            return;
+            return Ok(());
         }
 
         self.sql.push_str(if is_in { " in (" } else { " not in (" });
@@ -183,26 +190,27 @@ impl<'a> SqlWriter<'a> {
             if i > 0 {
                 self.sql.push_str(", ");
             }
-            self.write_expr(expr);
+            self.write_expr(expr)?;
         }
         self.sql.push(')');
+        Ok(())
     }
 
     /// Advanced wildcard handler supporting native SQLite string concatenation.
-    fn write_wildcard(&mut self, col: &ColumnMeta, expr: Expr, prefix: &str, suffix: &str) {
+    fn write_wildcard(&mut self, col: &ColumnMeta, expr: CondExpr, prefix: &str, suffix: &str) -> Result<()> {
         self.write_col(col);
         self.sql.push_str(" like ");
 
         match expr {
-            Expr::Value(DbValue::Text(s)) => {
+            CondExpr::Value(Value::Text(s)) => {
                 self.sql.push('?');
-                self.params.push(DbValue::Text(format!("{}{}{}", prefix, s, suffix)));
+                self.params.push(Value::Text(format!("{}{}{}", prefix, s, suffix)));
             }
-            Expr::Value(val) => {
+            CondExpr::Value(val) => {
                 self.sql.push('?');
                 self.params.push(val);
             }
-            Expr::Column(c) => {
+            CondExpr::Column(c) => {
                 if !prefix.is_empty() {
                     self.sql.push_str(" '%' || ");
                 }
@@ -211,6 +219,8 @@ impl<'a> SqlWriter<'a> {
                     self.sql.push_str(" || '%' ");
                 }
             }
+            CondExpr::Error(e) => return Err(Error::ConversionError(e)),
         }
+        Ok(())
     }
 }

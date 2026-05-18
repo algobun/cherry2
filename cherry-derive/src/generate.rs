@@ -41,7 +41,7 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
             #field_ident: {
                 // Prioritize attempts to get strict column names with table name prefixes
                 // `table_name.column_name`
-                let val_res: ::std::result::Result<::#crate_name::DbValue, _> = row.get(#strict_col_name);
+                let val_res: ::std::result::Result<::#crate_name::Value, _> = row.get(#strict_col_name);
 
                 // Smart degradation to pure column name lookup if strict column name does not exist
                 // (for native `AS` alias or pure `DTO` scenarios)
@@ -52,7 +52,7 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
                     }
                 };
 
-                ::#crate_name::DbType::from_db_value(db_val)?
+                ::#crate_name::Type::from_db(db_val)?
             }
         });
     }
@@ -113,7 +113,7 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
         // Filter the auto-increment columns' insert_values
         if !is_auto {
             insert_values.push(quote! {
-                (#column_name, ::#crate_name::DbType::to_db_value(&self.#field_ident))
+                (#column_name, ::#crate_name::Type::to_db(&self.#field_ident)?)
             });
         }
     }
@@ -128,8 +128,8 @@ pub(crate) fn generate_model_code(model: &ModelDef) -> proc_macro2::TokenStream 
                 #table_name
             }
 
-            fn to_values(&self) -> ::std::vec::Vec<(&'static str, ::#crate_name::DbValue)> {
-                ::std::vec![ #(#insert_values),* ]
+            fn to_values(&self) -> ::#crate_name::Result<::std::vec::Vec<(&'static str, ::#crate_name::Value)>> {
+                ::#crate_name::Result::Ok( ::std::vec![ #(#insert_values),* ] )
             }
         }
     }

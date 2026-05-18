@@ -1,6 +1,6 @@
 use crate::model::{FromRow, Row};
 use crate::ops::dsl::column::Column;
-use crate::{DbType, DbValue, Error, Result};
+use crate::{Type, Value, Error, Result};
 
 /// Represents the default state where no data is returned from the query.
 pub struct NoReturning;
@@ -48,7 +48,7 @@ pub trait ReturningColumns {
 }
 
 // Support for returning a single column
-impl<U: DbType> ReturningColumns for Column<U> {
+impl<U: Type> ReturningColumns for Column<U> {
     type Output = U;
 
     fn projection(&self) -> String {
@@ -57,16 +57,16 @@ impl<U: DbType> ReturningColumns for Column<U> {
 
     fn parser() -> fn(&rusqlite::Row) -> Result<Self::Output> {
         |row| {
-            let db_val: DbValue = row.get(0)
+            let db_val: Value = row.get(0)
                 .map_err(|e| Error::QueryError(e.to_string()))?;
-            U::from_db_value(db_val)
+            U::from_db(db_val)
         }
     }
 }
 
 macro_rules! impl_returning_columns_for_tuple {
     ( $( $idx:tt => $T:ident ),+ ) => {
-        impl<$( $T: DbType ),+> ReturningColumns for ($( Column<$T>, )+) {
+        impl<$( $T: Type ),+> ReturningColumns for ($( Column<$T>, )+) {
             type Output = ($( $T, )+);
 
             fn projection(&self) -> String {
@@ -78,8 +78,8 @@ macro_rules! impl_returning_columns_for_tuple {
                     Ok((
                         $(
                             {
-                                let db_val: DbValue = row.get($idx).map_err(|e| Error::QueryError(e.to_string()))?;
-                                $T::from_db_value(db_val)?
+                                let db_val: Value = row.get($idx).map_err(|e| Error::QueryError(e.to_string()))?;
+                                $T::from_db(db_val)?
                             }
                         ,)+
                     ))

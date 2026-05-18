@@ -6,7 +6,7 @@ use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
 use crate::types::model::Model;
-use crate::{DbValue, Result};
+use crate::{Value, Result};
 use rusqlite::params_from_iter;
 
 /// Represents the builder for an INSERT query.
@@ -54,7 +54,7 @@ impl<'a, T: Model> Insert<'a, T, NoReturning> {
     /// Executes the insert statement, returning the total number of affected rows.
     /// Automatically chunks the execution to avoid SQLite's parameter limit.
     pub fn execute(self) -> Result<usize> {
-        let chunks = self.generate_chunks();
+        let chunks = self.generate_chunks()?;
         execute_affected(self.executor, chunks)
     }
 }
@@ -85,7 +85,7 @@ impl<'a, T: Model, S> Insert<'a, T, S> {
     }
 
     /// Generates executable chunks of SQL and parameters to bypass SQLite limits.
-    fn generate_chunks(&self) -> Vec<Chunk> {
+    fn generate_chunks(&self) -> Result<Vec<Chunk>> {
         let mut chunks = Vec::new();
 
         if self.rows.is_empty() {
@@ -93,10 +93,10 @@ impl<'a, T: Model, S> Insert<'a, T, S> {
                 base_sql: build_base_insert(self.pattern, T::table_name(), &[], 0),
                 params: vec![],
             });
-            return chunks;
+            return Ok(chunks);
         }
 
-        let first_vals = self.rows[0].to_values();
+        let first_vals = self.rows[0].to_values()?;
         let col_names: Vec<&str> = first_vals.iter().map(|(k, _)| *k).collect();
         let cols_count = col_names.len();
 
@@ -105,7 +105,7 @@ impl<'a, T: Model, S> Insert<'a, T, S> {
             for _ in self.rows {
                 chunks.push(Chunk { base_sql: sql.clone(), params: vec![] });
             }
-            return chunks;
+            return Ok(chunks);
         }
 
         // SQLite limit is 32766. We leave a buffer of 200 for Upsert/WHERE parameters.
@@ -117,14 +117,14 @@ impl<'a, T: Model, S> Insert<'a, T, S> {
             let mut params = Vec::with_capacity(chunk.len() * cols_count);
 
             for row in chunk {
-                for (_, val) in row.to_values() {
+                for (_, val) in row.to_values()? {
                     params.push(val);
                 }
             }
             chunks.push(Chunk { base_sql, params });
         }
 
-        chunks
+        Ok(chunks)
     }
 }
 
@@ -132,7 +132,7 @@ impl<'a, T: Model, S> Insert<'a, T, S> {
 impl<'a, T: Model, O> Insert<'a, T, Returning<O>> {
     /// Executes the insert and parses the returned dataset.
     pub fn execute(self) -> Result<Vec<O>> {
-        let chunks = self.generate_chunks();
+        let chunks = self.generate_chunks()?;
         execute_returning(self.executor, chunks, &self.returning.projection, self.returning.parser)
     }
 }
@@ -164,20 +164,20 @@ impl<'a, T: Model, S> InsertUpdate<'a, T, S> {
     }
 
     /// Generates base chunks and appends the `ON CONFLICT` clause to each of them.
-    fn generate_upsert_chunks(&self) -> Vec<Chunk> {
-        let (suffix_sql, suffix_params) = self.build_upsert_suffix();
-        let mut chunks = self.builder.generate_chunks();
+    fn generate_upsert_chunks(&self) -> Result<Vec<Chunk>> {
+        let (suffix_sql, suffix_params) = self.build_upsert_suffix()?;
+        let mut chunks = self.builder.generate_chunks()?;
 
         for chunk in &mut chunks {
             chunk.base_sql.push_str(&suffix_sql);
             chunk.params.extend(suffix_params.clone());
         }
 
-        chunks
+        Ok(chunks)
     }
 
     /// Compiles the `ON CONFLICT` clause and appends it to the base query
-    fn build_upsert_suffix(&self) -> (String, Vec<DbValue>) {
+    fn build_upsert_suffix(&self) -> Result<(String, Vec<Value>)> {
         let mut sql = String::from(" on conflict (");
         sql.push_str(&self.conflict_cols.join(", "));
         sql.push_str(") do ");
@@ -189,16 +189,16 @@ impl<'a, T: Model, S> InsertUpdate<'a, T, S> {
         } else {
             sql.push_str("update set ");
 
-            build_assignments(&self.assignments, &mut sql, &mut params);
+            build_assignments(&self.assignments, &mut sql, &mut params)?;
 
             if let Some(cond) = &self.condition {
                 sql.push_str(" where ");
                 // Instruct the Condition AST to use the "excluded." prefix if necessary
-                cond.clone().build(&mut sql, &mut params, QueryContext::InsertUpsert);
+                cond.clone().build(&mut sql, &mut params, QueryContext::InsertUpsert)?;
             }
         }
 
-        (sql, params)
+        Ok((sql, params))
     }
 }
 
@@ -225,7 +225,7 @@ impl<'a, T: Model> InsertUpdate<'a, T, NoReturning> {
 
     /// Executes the upsert statement, returning the total number of affected rows.
     pub fn execute(self) -> Result<usize> {
-        let chunks = self.generate_upsert_chunks();
+        let chunks = self.generate_upsert_chunks()?;
         execute_affected(self.builder.executor, chunks)
     }
 }
@@ -233,7 +233,7 @@ impl<'a, T: Model> InsertUpdate<'a, T, NoReturning> {
 impl<'a, T: Model, O> InsertUpdate<'a, T, Returning<O>> {
     /// Executes the upsert and parses the returned dataset.
     pub fn execute(self) -> Result<Vec<O>> {
-        let chunks = self.generate_upsert_chunks();
+        let chunks = self.generate_upsert_chunks()?;
         execute_returning(
             self.builder.executor,
             chunks,
@@ -247,7 +247,7 @@ impl<'a, T: Model, O> InsertUpdate<'a, T, Returning<O>> {
 
 struct Chunk {
     base_sql: String,
-    params: Vec<DbValue>,
+    params: Vec<Value>,
 }
 
 /// Helper function to execute chunks without returning data (Result<usize>)

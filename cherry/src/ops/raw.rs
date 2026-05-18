@@ -1,6 +1,6 @@
 use crate::executor::Executor;
 use crate::model::{FromRow, Row};
-use crate::{DbValue, Result};
+use crate::{Value, Result};
 use rusqlite::params_from_iter;
 
 /// Represents a builder for executing raw SQL queries.
@@ -8,7 +8,7 @@ use rusqlite::params_from_iter;
 pub struct Raw<'a> {
     executor: Executor<'a>,
     sql: String,
-    params: Vec<DbValue>,
+    params: Vec<Value>,
 }
 
 impl<'a> Raw<'a> {
@@ -29,7 +29,7 @@ impl<'a> Raw<'a> {
     ///   .bind(18)
     ///   .bind("active");
     /// ```
-    pub fn bind<V: Into<DbValue>>(mut self, val: V) -> Self {
+    pub fn bind<V: Into<Value>>(mut self, val: V) -> Self {
         self.params.push(val.into());
         self
     }
@@ -46,7 +46,7 @@ impl<'a> Raw<'a> {
     pub fn bind_all<I, V>(mut self, iter: I) -> Self
     where
         I: IntoIterator<Item = V>,
-        V: Into<DbValue>,
+        V: Into<Value>,
     {
         self.params.extend(iter.into_iter().map(Into::into));
         self

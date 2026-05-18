@@ -4,14 +4,14 @@ use rusqlite::Result as RusqliteResult;
 use std::str::from_utf8;
 use crate::model::ColumnMeta;
 
-pub trait DbType: Sized {
-    fn to_db_value(&self) -> DbValue;
+pub trait Type: Sized {
+    fn to_db(&self) -> Result<Value>;
 
-    fn from_db_value(value: DbValue) -> Result<Self>;
+    fn from_db(value: Value) -> Result<Self>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum DbValue {
+pub enum Value {
     Null,
     Integer(i64),
     Real(f64),
@@ -20,58 +20,72 @@ pub enum DbValue {
 }
 
 
-impl ToSql for DbValue {
+impl ToSql for Value {
     fn to_sql(&self) -> RusqliteResult<ToSqlOutput<'_>> {
         match self {
-            DbValue::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
-            DbValue::Integer(i) => Ok(ToSqlOutput::from(*i)),
-            DbValue::Real(f) => Ok(ToSqlOutput::from(*f)),
-            DbValue::Text(t) => Ok(ToSqlOutput::from(t.as_str())),
-            DbValue::Blob(b) => Ok(ToSqlOutput::from(b.as_slice())),
+            Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
+            Value::Integer(i) => Ok(ToSqlOutput::from(*i)),
+            Value::Real(f) => Ok(ToSqlOutput::from(*f)),
+            Value::Text(t) => Ok(ToSqlOutput::from(t.as_str())),
+            Value::Blob(b) => Ok(ToSqlOutput::from(b.as_slice())),
         }
     }
 }
 
-impl FromSql for DbValue {
+impl FromSql for Value {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Null => Ok(DbValue::Null),
-            ValueRef::Integer(i) => Ok(DbValue::Integer(i)),
-            ValueRef::Real(f) => Ok(DbValue::Real(f)),
+            ValueRef::Null => Ok(Value::Null),
+            ValueRef::Integer(i) => Ok(Value::Integer(i)),
+            ValueRef::Real(f) => Ok(Value::Real(f)),
             ValueRef::Text(t) => {
                 let s = from_utf8(t).map_err(|e| FromSqlError::Other(Box::new(e)))?;
-                Ok(DbValue::Text(s.to_string()))
+                Ok(Value::Text(s.to_string()))
             }
-            ValueRef::Blob(b) => Ok(DbValue::Blob(b.to_vec())),
+            ValueRef::Blob(b) => Ok(Value::Blob(b.to_vec())),
         }
     }
 }
 
 
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub enum CondExpr {
     Column(ColumnMeta),
-    Value(DbValue),
+    Value(Value),
+    Error(String),
 }
 
-// Let the right value be either a specific value or another column
-pub trait IntoExpr {
-    fn into_expr(self) -> Expr;
-}
 
-// Implement IntoExpr for all columns
-impl IntoExpr for ColumnMeta {
-    fn into_expr(self) -> Expr {
-        Expr::Column(self)
+impl From<ColumnMeta> for CondExpr {
+    fn from(value: ColumnMeta) -> Self {
+        CondExpr::Column(value)
     }
 }
 
-// Implement IntoExpr for all base datatypes.
-impl<T: Into<DbValue>> IntoExpr for T {
-    fn into_expr(self) -> Expr {
-        Expr::Value(self.into())
+impl From<Result<Value>> for CondExpr {
+    fn from(value: Result<Value>) -> Self {
+        match value {
+            Ok(v) => CondExpr::Value(v),
+            Err(e) => CondExpr::Error(e.to_string()),
+        }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum AssignExpr {
+    Value(Value),
+    Error(String),
+}
+
+impl From<Result<Value>> for AssignExpr {
+    fn from(value: Result<Value>) -> Self {
+        match value {
+            Ok(v) => AssignExpr::Value(v),
+            Err(e) => AssignExpr::Error(e.to_string()),
+        }
+    }
+}
+
 
 
 
@@ -85,18 +99,18 @@ mod tests {
         User,
     }
 
-    impl DbType for Role {
-        fn to_db_value(&self) -> DbValue {
+    impl Type for Role {
+        fn to_db(&self) -> Result<Value> {
             match self {
-                Role::Admin => DbValue::Text("admin".to_string()),
-                Role::User => DbValue::Text("user".to_string()),
+                Role::Admin => Ok(Value::Text("admin".to_string())),
+                Role::User => Ok(Value::Text("user".to_string())),
             }
         }
 
-        fn from_db_value(value: DbValue) -> Result<Self> {
+        fn from_db(value: Value) -> Result<Self> {
             match value {
-                DbValue::Text(s) if s == "admin" => Ok(Role::Admin),
-                DbValue::Text(s) if s == "user" => Ok(Role::User),
+                Value::Text(s) if s == "admin" => Ok(Role::Admin),
+                Value::Text(s) if s == "user" => Ok(Role::User),
                 _ => Err(Error::TypeMismatch("Invalid role mapping".to_string())),
             }
         }

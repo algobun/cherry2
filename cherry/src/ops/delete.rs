@@ -3,7 +3,7 @@ use crate::model::{FromRow, Model};
 use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
 use crate::query::dsl::Condition;
-use crate::{DbValue, Result};
+use crate::{Value, Result};
 use rusqlite::params_from_iter;
 use std::marker::PhantomData;
 
@@ -59,7 +59,7 @@ impl<'a, T: Model> Delete<'a, T, NoReturning> {
 
     /// Executes the query and returns the number of affected rows.
     pub fn execute(self) -> Result<usize> {
-        let (sql, params) = build_sql_and_params::<T>(&self.condition, None);
+        let (sql, params) = build_sql_and_params::<T>(&self.condition, None)?;
         self.executor.with_conn(|conn| Ok(conn.execute(&sql, params_from_iter(params))?))
     }
 }
@@ -67,7 +67,7 @@ impl<'a, T: Model> Delete<'a, T, NoReturning> {
 impl<'a, T: Model, O> Delete<'a, T, Returning<O>> {
     /// Executes the query and parses the returned dataset.
     pub fn execute(self) -> Result<Vec<O>> {
-        let (sql, params) = build_sql_and_params::<T>(&self.condition, Some(&self.returning.projection));
+        let (sql, params) = build_sql_and_params::<T>(&self.condition, Some(&self.returning.projection))?;
 
         self.executor.with_conn(|conn| {
             let mut stmt = conn.prepare(&sql)?;
@@ -85,7 +85,7 @@ impl<'a, T: Model, O> Delete<'a, T, Returning<O>> {
 fn build_sql_and_params<T: Model>(
     condition: &Option<Condition>,
     returning_projection: Option<&str>
-) -> (String, Vec<DbValue>) {
+) -> Result<(String, Vec<Value>)> {
     let mut sql = String::from("delete from ");
     sql.push_str(T::table_name());
 
@@ -93,7 +93,7 @@ fn build_sql_and_params<T: Model>(
 
     if let Some(cond) = condition {
         sql.push_str(" where ");
-        cond.clone().build(&mut sql, &mut params, QueryContext::Delete);
+        cond.clone().build(&mut sql, &mut params, QueryContext::Delete)?;
     }
 
     if let Some(projection) = returning_projection {
@@ -101,5 +101,5 @@ fn build_sql_and_params<T: Model>(
         sql.push_str(projection);
     }
 
-    (sql, params)
+    Ok((sql, params))
 }

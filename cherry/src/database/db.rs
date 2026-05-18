@@ -98,3 +98,21 @@ impl Database {
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use cherry_derive::Model;
+    use super::*;
+
+    #[derive(Model)]
+    struct User {
+        id: usize,
+        name: String,
+    }
+
+    #[test]
+    fn test() {
+        let a = DatabaseBuilder::new("").build().unwrap();
+        let r = a.select::<User>().filter(User::id.eq(1_usize) & User::name.eq("zh")).load().unwrap();
+    }
+}

@@ -6,7 +6,7 @@ use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
 use crate::query::dsl::Condition;
 use crate::types::model::Model;
-use crate::{DbValue, Error, Result};
+use crate::{Value, Error, Result};
 use rusqlite::params_from_iter;
 use std::marker::PhantomData;
 
@@ -109,7 +109,7 @@ fn build_sql_and_params<T: Model>(
     assignments: &[Assignment],
     condition: &Option<Condition>,
     returning_projection: Option<&str>,
-) -> Result<(String, Vec<DbValue>)> {
+) -> Result<(String, Vec<Value>)> {
     // [Safety Check] Prevent generating invalid SQL like "update table set where ..."
     if assignments.is_empty() {
         return Err(Error::QueryError("Cannot execute update without any assignments (SET)".into()));
@@ -120,11 +120,11 @@ fn build_sql_and_params<T: Model>(
     sql.push_str(" set ");
 
     let mut params = Vec::new();
-    build_assignments(assignments, &mut sql, &mut params);
+    build_assignments(assignments, &mut sql, &mut params)?;
 
     if let Some(cond) = condition {
         sql.push_str(" where ");
-        cond.clone().build(&mut sql, &mut params, QueryContext::Update);
+        cond.clone().build(&mut sql, &mut params, QueryContext::Update)?;
     }
 
     if let Some(projection) = returning_projection {

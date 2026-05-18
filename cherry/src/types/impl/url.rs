@@ -1,15 +1,15 @@
-use crate::{DbType, DbValue, Error, Result};
+use crate::{Error, Result, Type, Value};
 use url::Url;
 
-impl DbType for Url {
-    fn to_db_value(&self) -> DbValue {
+impl Type for Url {
+    fn to_db(&self) -> Result<Value> {
         // Url's Display trait already implements standard serialization.
-        DbValue::Text(self.to_string())
+        Ok(Value::Text(self.to_string()))
     }
 
-    fn from_db_value(value: DbValue) -> Result<Self> {
+    fn from_db(value: Value) -> Result<Self> {
         match value {
-            DbValue::Text(s) => {
+            Value::Text(s) => {
                 Url::parse(&s).map_err(|e| Error::ParseError(e.to_string()))
             }
             _ => Err(Error::TypeMismatch("Expected Text for url::Url".into())),

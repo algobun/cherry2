@@ -1,11 +1,12 @@
 use crate::executor::Executor;
-use crate::ops::dsl::condition::{Condition, QueryContext};
+use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::order::{OrderBy, OrderDir};
+use crate::ops::dsl::QueryContext;
 use crate::query::dsl::Column;
 use crate::types::column::{SelectItem, SelectedColumns};
 use crate::types::model::{FromRow, Model};
 use crate::types::row::Row;
-use crate::{DbValue, Result};
+use crate::{Result, Value};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -175,7 +176,7 @@ impl<'a, T: Model> Select<'a, T> {
             self.limit,
             self.offset,
             self.ctx.clone(),
-        );
+        )?;
 
         self.executor.with_conn(|conn| {
             let mut stmt = conn.prepare(&sql)?;
@@ -207,7 +208,7 @@ impl<'a, T: Model> Select<'a, T> {
             self.limit,
             self.offset,
             self.ctx.clone(),
-        );
+        )?;
 
         self.executor.with_conn(|conn| {
             let count: i64 = conn.query_row(
@@ -233,7 +234,7 @@ fn build_sql_and_params<T: Model>(
     limit: Option<usize>,
     offset: Option<usize>,
     ctx: QueryContext,
-) -> (String, Vec<DbValue>) {
+) -> Result<(String, Vec<Value>)> {
     let mut params = Vec::new();
     let mut sql = String::from("select ");
 
@@ -263,13 +264,13 @@ fn build_sql_and_params<T: Model>(
         sql.push_str(join.table_name);
         sql.push_str(" on ");
         // Use the Condition AST's build capability directly
-        join.on_condition.clone().build(&mut sql, &mut params, ctx.clone());
+        join.on_condition.clone().build(&mut sql, &mut params, ctx.clone())?;
     }
 
     if let Some(cond) = condition {
         sql.push_str(" where ");
         // Requires Condition to implement Clone
-        cond.clone().build(&mut sql, &mut params, ctx.clone());
+        cond.clone().build(&mut sql, &mut params, ctx.clone())?;
     }
 
     if !group_bys.is_empty() {
@@ -279,7 +280,7 @@ fn build_sql_and_params<T: Model>(
 
     if let Some(having_cond) = having {
         sql.push_str(" having ");
-        having_cond.clone().build(&mut sql, &mut params, ctx);
+        having_cond.clone().build(&mut sql, &mut params, ctx)?;
     }
 
     if !order_bys.is_empty() {
@@ -308,5 +309,5 @@ fn build_sql_and_params<T: Model>(
         sql.push_str(&format!(" offset {}", o));
     }
 
-    (sql, params)
+    Ok((sql, params))
 }

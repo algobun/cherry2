@@ -16,7 +16,7 @@ pub use {
     database::db::Database,
     error::Error,
     executor::transaction::Transaction,
-    types::value::{DbType, DbValue},
+    types::value::{Type, Value},
 };
 
 pub mod model {

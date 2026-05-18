@@ -1,23 +1,24 @@
 use crate::types::row::Row;
-use crate::types::value::DbValue;
+use crate::types::value::Value;
+use crate::Result;
 use std::borrow::Cow;
 
 pub trait FromRow: Sized {
     fn columns() -> Cow<'static, [ColumnMeta]>;
-    fn from_row(row: &Row) -> crate::Result<Self>;
+    fn from_row(row: &Row) -> Result<Self>;
 }
 
 pub trait Model: FromRow {
     fn table_name() -> &'static str;
-    fn to_values(&self) -> Vec<(&'static str, DbValue)>;
+    fn to_values(&self) -> Result<Vec<(&'static str, Value)>>;
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct ColumnMeta {
-    pub(crate) table_name: &'static str,
-    pub(crate) column_name: &'static str,
-    pub(crate) is_ignore: bool,
-    pub(crate) is_autoincrement: bool,
+    pub table_name: &'static str,
+    pub column_name: &'static str,
+    pub is_ignore: bool,
+    pub is_autoincrement: bool,
     // pub(crate) is_primary_key: bool,
     // pub(crate) is_nullable: bool,
 }

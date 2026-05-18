@@ -1,15 +1,15 @@
-use crate::{DbType, DbValue, Error, Result};
+use crate::{Error, Result, Type, Value};
 use jiff::Timestamp;
 
-impl DbType for Timestamp {
-    fn to_db_value(&self) -> DbValue {
+impl Type for Timestamp {
+    fn to_db(&self) -> Result<Value> {
         // jiff converts to a standard ISO 8601 string by default
-        DbValue::Text(self.to_string())
+        Ok(Value::Text(self.to_string()))
     }
 
-    fn from_db_value(value: DbValue) -> Result<Self> {
+    fn from_db(value: Value) -> Result<Self> {
         match value {
-            DbValue::Text(s) => {
+            Value::Text(s) => {
                 s.parse::<Timestamp>().map_err(|e| Error::ParseError(e.to_string()))
             }
             _ => Err(Error::TypeMismatch("Expected Text for jiff::Timestamp".into())),

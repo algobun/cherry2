@@ -1,4 +1,5 @@
-use crate::{Error, Result, Type, Value};
+use crate::core::value::{Type, Value};
+use crate::{Error, Result};
 use jiff::Timestamp;
 
 impl Type for Timestamp {

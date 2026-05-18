@@ -1,12 +1,13 @@
+use crate::core::model::Model;
+use crate::core::value::Value;
 use crate::executor::Executor;
-use crate::model::FromRow;
 use crate::ops::dsl::assignment::build_assignments;
 use crate::ops::dsl::assignment::Assignment;
+use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
-use crate::query::dsl::Condition;
-use crate::types::model::Model;
-use crate::{Value, Error, Result};
+use crate::types::FromRow;
+use crate::{Error, Result};
 use rusqlite::params_from_iter;
 use std::marker::PhantomData;
 

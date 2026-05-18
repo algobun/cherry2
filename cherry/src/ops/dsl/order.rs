@@ -1,4 +1,4 @@
-use crate::model::ColumnMeta;
+use crate::types::ColumnMeta;
 
 pub enum OrderDir {
     Asc,

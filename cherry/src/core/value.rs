@@ -1,12 +1,10 @@
+use crate::types::ColumnMeta;
 use crate::Result;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
-use rusqlite::Result as RusqliteResult;
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, Null, ToSql, ToSqlOutput, ValueRef};
 use std::str::from_utf8;
-use crate::model::ColumnMeta;
 
 pub trait Type: Sized {
     fn to_db(&self) -> Result<Value>;
-
     fn from_db(value: Value) -> Result<Self>;
 }
 
@@ -21,9 +19,9 @@ pub enum Value {
 
 
 impl ToSql for Value {
-    fn to_sql(&self) -> RusqliteResult<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
         match self {
-            Value::Null => Ok(ToSqlOutput::from(rusqlite::types::Null)),
+            Value::Null => Ok(ToSqlOutput::from(Null)),
             Value::Integer(i) => Ok(ToSqlOutput::from(*i)),
             Value::Real(f) => Ok(ToSqlOutput::from(*f)),
             Value::Text(t) => Ok(ToSqlOutput::from(t.as_str())),

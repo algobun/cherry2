@@ -1,9 +1,10 @@
+use crate::core::model::{FromRow, Model};
+use crate::core::value::Value;
 use crate::executor::Executor;
-use crate::model::{FromRow, Model};
+use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
-use crate::query::dsl::Condition;
-use crate::{Value, Result};
+use crate::Result;
 use rusqlite::params_from_iter;
 use std::marker::PhantomData;
 

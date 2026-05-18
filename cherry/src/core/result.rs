@@ -1,4 +1,4 @@
-use crate::model::{ColumnMeta, FromRow, Row};
+use crate::types::{ColumnMeta, FromRow, Row};
 use crate::Result;
 use std::borrow::Cow;
 

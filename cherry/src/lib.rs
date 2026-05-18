@@ -1,27 +1,35 @@
 // #![allow(unused_imports, deprecated, unused_must_use, unused_mut, unused_variables, dead_code, unreachable_code)]
-#![allow(private_bounds)]
 
 // For `mod tests` run proc macro `::cherry::...`, It means self.
+#![allow(private_bounds)]
 extern crate self as cherry;
 
 pub(crate) mod error;
-pub(crate) mod types;
-pub(crate) mod ops;
+pub(crate) mod core;
+pub(crate) mod database;
 pub(crate) mod executor;
-mod database;
+pub(crate) mod ops;
 
-pub use {
-    cherry_derive::Model,
-    database::builder::DatabaseBuilder,
-    database::db::Database,
-    error::Error,
-    executor::transaction::Transaction,
-    types::value::{Type, Value},
-};
+pub use cherry_derive::Model;
+pub use error::Error;
+pub type Result<T, E = crate::error::Error> = std::result::Result<T, E>;
 
-pub mod model {
-    pub use crate::types::model::{ColumnMeta, FromRow, Model};
-    pub use crate::types::row::Row;
+pub mod db {
+    pub use crate::database::builder::DatabaseBuilder;
+    pub use crate::database::db::Database;
+    pub use crate::executor::transaction::Transaction;
+}
+
+pub mod types {
+    pub use crate::core::model::{ColumnMeta, FromRow, Model};
+    pub use crate::core::row::Row;
+    pub use crate::core::value::{Type, Value};
+
+    #[doc(hidden)]
+    #[cfg(feature = "json")]
+    pub mod json {
+        pub use crate::core::impls::json::{Json, from_db, to_db};
+    }
 }
 
 pub mod query {
@@ -40,6 +48,3 @@ pub mod query {
         pub use crate::ops::dsl::order::{OrderBy, OrderDir};
     }
 }
-
-
-pub type Result<T, E = crate::error::Error> = core::result::Result<T, E>;

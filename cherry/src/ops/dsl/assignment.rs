@@ -1,5 +1,5 @@
-use crate::model::ColumnMeta;
-use crate::types::value::{AssignExpr, Value};
+use crate::core::model::ColumnMeta;
+use crate::core::value::{AssignExpr, Value};
 use crate::{Error, Result};
 
 /// Represents an assignment operation in an `UPDATE` or `ON CONFLICT DO UPDATE` (Upsert) statement.
@@ -73,7 +73,7 @@ impl<'a> AssignmentWriter<'a> {
         }
         Ok(())
     }
-    
+
     fn take_value(expr: AssignExpr) -> Result<Value> {
         match expr {
             AssignExpr::Value(v) => Ok(v),

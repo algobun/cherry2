@@ -20,6 +20,7 @@ pub(crate) struct FieldDef {
     pub ty: syn::Type,
     pub column_name: String,
     pub is_autoincrement: bool,
+    pub is_json: bool,
     pub is_ignored: bool,
 }
 

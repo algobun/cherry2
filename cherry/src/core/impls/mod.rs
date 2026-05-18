@@ -7,7 +7,7 @@ mod time;
 #[cfg(feature = "jiff")]
 mod jiff;
 #[cfg(feature = "json")]
-mod json;
+pub mod json;
 #[cfg(feature = "uuid")]
 mod uuid;
 #[cfg(feature = "url")]

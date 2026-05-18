@@ -1,12 +1,13 @@
+use crate::core::model::Model;
+use crate::core::model::FromRow;
+use crate::core::value::Value;
 use crate::executor::Executor;
-use crate::model::FromRow;
 use crate::ops::dsl::assignment::{build_assignments, Assignment};
 use crate::ops::dsl::column::Column;
 use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::returning::{NoReturning, Returning, ReturningColumns};
 use crate::ops::dsl::QueryContext;
-use crate::types::model::Model;
-use crate::{Value, Result};
+use crate::Result;
 use rusqlite::params_from_iter;
 
 /// Represents the builder for an INSERT query.

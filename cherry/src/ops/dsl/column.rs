@@ -1,9 +1,9 @@
-use crate::model::ColumnMeta;
+use crate::core::model::ColumnMeta;
+use crate::core::value::Type;
 use crate::ops::dsl::assignment::Assignment;
 use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::condition::Operator;
 use crate::ops::dsl::order::{OrderBy, OrderDir};
-use crate::types::value::Type;
 use std::marker::PhantomData;
 
 /// Database column definitions

@@ -1,6 +1,6 @@
-use crate::model::ColumnMeta;
+use crate::core::value::{CondExpr, Value};
 use crate::ops::dsl::QueryContext;
-use crate::types::value::{CondExpr, Value};
+use crate::types::ColumnMeta;
 use crate::{Error, Result};
 use std::ops::{BitAnd, BitOr};
 

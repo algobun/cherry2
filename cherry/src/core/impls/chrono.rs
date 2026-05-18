@@ -1,4 +1,5 @@
-use crate::{Error, Result, Type, Value};
+use crate::core::value::{Type, Value};
+use crate::{Error, Result};
 use chrono::{DateTime, Utc};
 
 impl Type for DateTime<Utc> {
@@ -12,7 +13,7 @@ impl Type for DateTime<Utc> {
             Value::Text(s) => {
                 let dt = DateTime::parse_from_rfc3339(&s)
                     .map_err(|e| Error::ParseError(e.to_string()))?;
-                Ok(dt.with_timezone(&chrono::Utc))
+                Ok(dt.with_timezone(&Utc))
             }
             _ => Err(Error::TypeMismatch("Expected Text for DateTime".into())),
         }

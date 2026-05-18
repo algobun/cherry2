@@ -1,12 +1,13 @@
+use crate::core::column::{SelectItem, SelectedColumns};
+use crate::core::model::{FromRow, Model};
+use crate::core::row::Row;
+use crate::core::value::Value;
 use crate::executor::Executor;
+use crate::ops::dsl::column::Column;
 use crate::ops::dsl::condition::Condition;
 use crate::ops::dsl::order::{OrderBy, OrderDir};
 use crate::ops::dsl::QueryContext;
-use crate::query::dsl::Column;
-use crate::types::column::{SelectItem, SelectedColumns};
-use crate::types::model::{FromRow, Model};
-use crate::types::row::Row;
-use crate::{Result, Value};
+use crate::Result;
 use std::marker::PhantomData;
 
 #[derive(Clone)]

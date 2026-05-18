@@ -4,7 +4,7 @@ use crate::ops::insert::{AsRows, Insert};
 use crate::ops::raw::Raw;
 use crate::ops::select::Select;
 use crate::ops::update::Update;
-use crate::types::model::Model;
+use crate::core::model::Model;
 
 /// Represents a database transaction context.
 /// Provides the exact same CRUD builder APIs as `Database`, ensuring consistent usage.

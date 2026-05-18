@@ -1,6 +1,8 @@
-use crate::model::{FromRow, Row};
+use crate::core::model::FromRow;
+use crate::core::row::Row;
+use crate::core::value::{Type, Value};
 use crate::ops::dsl::column::Column;
-use crate::{Type, Value, Error, Result};
+use crate::{Error, Result};
 
 /// Represents the default state where no data is returned from the query.
 pub struct NoReturning;

@@ -1,4 +1,5 @@
-use crate::{Type, Value, Error, Result};
+use crate::core::value::{Type, Value};
+use crate::{Error, Result};
 use uuid::Uuid;
 
 impl Type for Uuid {

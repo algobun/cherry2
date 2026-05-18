@@ -1,4 +1,5 @@
-use crate::{Error, Result, Type, Value};
+use crate::core::value::{Type, Value};
+use crate::{Error, Result};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 

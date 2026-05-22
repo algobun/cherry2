@@ -319,7 +319,7 @@ pub(crate) enum Pattern {
 }
 
 /// A trait used to normalize single structs, arrays, or vectors into a slice.
-pub(crate) trait AsRows<'a> {
+pub trait AsRows<'a> {
     type Item;
     fn as_rows(&self) -> &'a [Self::Item];
 }

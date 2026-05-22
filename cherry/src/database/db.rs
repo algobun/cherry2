@@ -35,7 +35,6 @@ impl Database {
 
     /// Initiates an INSERT operation builder.
     /// Accepts a single model, a slice, or a vector of models.
-    #[allow(private_interfaces)]
     pub fn insert<'a, M: AsRows<'a>>(&'a self, m: M) -> Insert<'a, M::Item> where M::Item: Model {
         Insert::create(Executor::Backend(&self.backend), m)
     }

@@ -19,7 +19,8 @@ impl<'a> Transaction<'a> {
     }
 
     /// Initiates an INSERT operation builder within the current transaction.
-    pub fn insert<T: Model, M: AsRows<'a, T>>(&'a self, m: M) -> Insert<'a, T> {
+    #[allow(private_interfaces)]
+    pub fn insert<M: AsRows<'a>>(&'a self, m: M) -> Insert<'a, M::Item> where M::Item: Model {
         Insert::create(self.executor, m)
     }
 

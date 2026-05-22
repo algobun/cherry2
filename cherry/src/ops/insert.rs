@@ -22,7 +22,7 @@ pub struct Insert<'a, T, S = NoReturning> {
 impl<'a, T: Model> Insert<'a, T, NoReturning> {
     pub(crate) fn create<M>(executor: Executor<'a>, m: M) -> Self
     where
-        M: AsRows<'a, T>,
+        M: AsRows<'a, Item = T>,
     {
         Insert {
             executor,
@@ -319,25 +319,29 @@ pub(crate) enum Pattern {
 }
 
 /// A trait used to normalize single structs, arrays, or vectors into a slice.
-pub(crate) trait AsRows<'a, T> {
-    fn as_rows(&self) -> &'a [T];
+pub(crate) trait AsRows<'a> {
+    type Item;
+    fn as_rows(&self) -> &'a [Self::Item];
 }
 
-impl<'a, T> AsRows<'a, T> for &'a T {
+impl<'a, T: Model> AsRows<'a> for &'a T {
+    type Item = T;
     fn as_rows(&self) -> &'a [T] {
-        std::slice::from_ref(self)
+        std::slice::from_ref(*self)
     }
 }
 
-impl<'a, T> AsRows<'a, T> for &'a [T] {
+impl<'a, T: Model> AsRows<'a> for &'a [T] {
+    type Item = T;
     fn as_rows(&self) -> &'a [T] {
-        self
+        *self
     }
 }
 
-impl<'a, T> AsRows<'a, T> for &'a Vec<T> {
+impl<'a, T: Model> AsRows<'a> for &'a Vec<T> {
+    type Item = T;
     fn as_rows(&self) -> &'a [T] {
-        self
+        self.as_slice()
     }
 }
 

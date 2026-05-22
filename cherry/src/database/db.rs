@@ -1,3 +1,4 @@
+use crate::core::model::Model;
 use crate::database::builder::DatabaseBuilder;
 use crate::executor::transaction::Transaction;
 use crate::executor::Executor;
@@ -6,7 +7,6 @@ use crate::ops::insert::{AsRows, Insert};
 use crate::ops::raw::Raw;
 use crate::ops::select::Select;
 use crate::ops::update::Update;
-use crate::core::model::Model;
 use crate::Result;
 use std::path::Path;
 
@@ -35,7 +35,8 @@ impl Database {
 
     /// Initiates an INSERT operation builder.
     /// Accepts a single model, a slice, or a vector of models.
-    pub fn insert<'a, T: Model, M: AsRows<'a, T>>(&'a self, m: M) -> Insert<'a, T> {
+    #[allow(private_interfaces)]
+    pub fn insert<'a, M: AsRows<'a>>(&'a self, m: M) -> Insert<'a, M::Item> where M::Item: Model {
         Insert::create(Executor::Backend(&self.backend), m)
     }
 
@@ -101,9 +102,6 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use cherry_derive::Model;
-    use super::*;
-
     // #[derive(Model)]
     struct User {
         id: usize,

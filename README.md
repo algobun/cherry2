@@ -2,7 +2,8 @@
 
 A developer-centric, type-safe, ultra-ergonomic SQLite ORM for Rust, built on top of `rusqlite`.
 
-`cherry` rejects the "one ORM to rule them all" philosophy. By focusing exclusively on **SQLite**, it avoids the heavy architectural compromises, bloated generic parameters, and unreadable compile errors found in multi-database ORMs. It embraces Rust's type system to provide an API that reads exactly like raw SQL while enforcing absolute type safety at compile time.
+`cherry` rejects the "one ORM to rule them all" philosophy. By focusing exclusively on **SQLite**, it avoids the heavy architectural compromises, bloated generic parameters, and unreadable compile errors found in multi-database ORMs. It embraces Rust's type system to provide an API that reads exactly like raw SQL while eliminating the most common database footguns—like column typos, nullability mismatches, and incorrect parameter binding—at compile time, without locking you into a rigid type-gymnastics prison.
+
 
 ------
 
@@ -44,7 +45,7 @@ pub struct User {
     
     // The framework handles JSON proxying entirely at compile time via transparent macros.
     // No ugly Newtype wrappers needed, and no Trait Coherence violations.
-    // Your entity remains a pure data carrier (Needed enable "json" features).
+    // Your entity remains a pure data carrier (Needed enable "json" feature).
     #[orm(json)]
     pub members: Vec<String>,
     
@@ -129,7 +130,7 @@ let stats = db.select::<User>()
 
 ### Type-Safe JOINs (The Grail)
 
-Multi-table joins leverage index-based tuple slicing under the hood. No schema-mapping nightmares, no field conflicts, and no redundant intermediate structs.
+Multi-table joins are powered by a predictable column-aliasing mechanism under the hood (table.column as "table.column"). By isolating fields with qualified names, cherry seamlessly unpacks rows into structured tuples without complex type-level coordinate matching, keeping macro overhead low and compile times exceptionally fast.
 
 You can seamlessly mix `INNER JOIN` and `LEFT JOIN`. If a `LEFT JOIN` fails to find a match, the `Option<M>` element decisively resolves to `None`.
 
@@ -149,6 +150,21 @@ let rows: Vec<(User, Role, Option<Company>)> = db.select::<User>()
     .filter(User::is_active.eq(true))
     .load_as::<(User, Role, Option<Company>)>()?;
 ```
+
+#### ⚠️ Limitation Note: Self Joins & Table Aliasing
+Because `cherry` currently isolates columns using their native table names (e.g., `users.id`), performing a `SELF JOIN` (joining a table onto itself, such as matching a user to their manager) will cause column name conflicts in the underlying mapper.
+
+If your query requires a self-join, please temporarily bypass the DSL and use the `db.raw()` escape hatch:
+
+```rust
+// Temporary workaround for Self Joins using Raw SQL
+let rows: Vec<(User, UserProfileDTO)> = db.raw(
+    "SELECT u.*, m.user_name as m_name, m.role as m_role \
+     FROM users u \
+     INNER JOIN users m ON u.manager_id = m.id"
+).load_as::<(User, UserProfileDTO)>()?;
+```
+Full DSL support for dynamic table aliasing (`.alias()`) is planned for a future release(Maybe).
 
 ------
 

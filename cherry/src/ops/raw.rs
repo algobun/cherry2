@@ -1,8 +1,9 @@
 use crate::core::model::FromRow;
 use crate::core::row::Row;
+use crate::core::value::Type;
 use crate::core::value::Value;
 use crate::executor::Executor;
-use crate::Result;
+use crate::{Error, Result};
 use rusqlite::params_from_iter;
 
 /// Represents a builder for executing raw SQL queries.
@@ -11,6 +12,8 @@ pub struct Raw<'a> {
     executor: Executor<'a>,
     sql: String,
     params: Vec<Value>,
+    // Storing possible type conversion errors in the bind process
+    error: Option<Error>
 }
 
 impl<'a> Raw<'a> {
@@ -19,6 +22,7 @@ impl<'a> Raw<'a> {
             executor,
             sql: sql.into(),
             params: Vec::new(),
+            error: None,
         }
     }
 
@@ -31,8 +35,13 @@ impl<'a> Raw<'a> {
     ///   .bind(18)
     ///   .bind("active");
     /// ```
-    pub fn bind<V: Into<Value>>(mut self, val: V) -> Self {
-        self.params.push(val.into());
+    pub fn bind<T: Type>(mut self, val: T) -> Self {
+        if self.error.is_none() {
+            match val.to_db() {
+                Ok(v) => self.params.push(v),
+                Err(e) => self.error = Some(e),
+            }
+        }
         self
     }
 
@@ -45,18 +54,30 @@ impl<'a> Raw<'a> {
     /// db.raw("SELECT * FROM users WHERE id IN (?, ?, ?)")
     ///   .bind_all(ids);
     /// ```
-    pub fn bind_all<I, V>(mut self, iter: I) -> Self
+    pub fn bind_all<I, T>(mut self, iter: I) -> Self
     where
-        I: IntoIterator<Item = V>,
-        V: Into<Value>,
+        I: IntoIterator<Item = T>,
+        T: Type,
     {
-        self.params.extend(iter.into_iter().map(Into::into));
+        if self.error.is_none() {
+            for val in iter {
+                match val.to_db() {
+                    Ok(v) => self.params.push(v),
+                    Err(e) => self.error = Some(e),
+                }
+            }
+        }
         self
     }
 
     /// Executes the raw SQL query, returning the number of affected rows.
     /// Typically used for `UPDATE`, `DELETE`, or `INSERT` statements.
     pub fn execute(self) -> Result<usize> {
+        // Prioritize checking for parameter type conversion errors in the build phase
+        if let Some(err) = self.error {
+            return Err(err);
+        }
+
         self.executor.with_conn(|conn| {
             let affected = conn.execute(&self.sql, params_from_iter(self.params))?;
             Ok(affected)    
@@ -67,6 +88,11 @@ impl<'a> Raw<'a> {
     /// The target type `U` must implement `FromRow`.
     /// Typically used for `SELECT` or `RETURNING` statements.
     pub fn load_as<U: FromRow>(self) -> Result<Vec<U>> {
+        // Prioritize checking for parameter type conversion errors in the build phase
+        if let Some(err) = self.error {
+            return Err(err);
+        }
+        
         self.executor.with_conn(|conn| {
             let mut stmt = conn.prepare(&self.sql)?;
             let mut rows = stmt.query(params_from_iter(self.params))?;

@@ -113,9 +113,15 @@ pub(crate) fn generate_from_row_code(model: &ModelDef) -> proc_macro2::TokenStre
 
         let strict_col_name = format!("{}.{}", table_name, col_name);
         let parse_logic = if is_json {
-            quote! { ::#crate_name::types::json::from_db(val)? }
+            quote! {
+                ::#crate_name::types::json::from_db(val)
+                    .map_err(|e| ::#crate_name::Error::ParseError(format!("Column '{}': {}", stringify!(#field_ident), e)))?
+            }
         } else {
-            quote! { ::#crate_name::types::Type::from_db(val)? }
+            quote! {
+                ::#crate_name::types::Type::from_db(val)
+                    .map_err(|e| ::#crate_name::Error::ParseError(format!("Column '{}': {}", stringify!(#field_ident), e)))?
+            }
         };
 
         row_reads.push(quote! {

@@ -247,7 +247,7 @@ fn build_sql_and_params<T: Model>(
     let col_part = selected_columns.iter().map(|item| {
         match item {
             // Automatically add "table.column" as a conflict-resistant alias.
-            SelectItem::Column(c) => format!("{0}.{1} AS \"{0}.{1}\"", c.table_name, c.column_name),
+            SelectItem::Column(c) => format!("{0}.{1} as \"{0}.{1}\"", c.table_name, c.column_name),
             SelectItem::Raw(raw_sql) => raw_sql.clone(), // e.g., "count(1)"
         }
     }).collect::<Vec<_>>().join(", ");

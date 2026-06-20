@@ -1,4 +1,5 @@
 use crate::query::dsl::Column;
+use crate::types::json::Json;
 use crate::types::{ColumnMeta, Type, Value};
 use crate::Result;
 
@@ -85,5 +86,19 @@ impl<'a> IntoSqlExpr<String> for &'a str {
 impl<'a> IntoSqlExpr<Vec<u8>> for &'a [u8] {
     fn into_sql_expr(self) -> SqlExpr {
         SqlExpr::from(self.to_db())
+    }
+}
+
+
+#[cfg(feature = "json")]
+impl<'a, T> IntoSqlExpr<Json<T>> for &'a T
+where
+    T: serde::Serialize,
+{
+    fn into_sql_expr(self) -> SqlExpr {
+        match serde_json::to_string(self) {
+            Ok(json_str) => SqlExpr::Value(Value::Text(json_str)),
+            Err(e) => SqlExpr::Error(e.to_string()),
+        }
     }
 }

@@ -29,9 +29,11 @@ pub struct ColumnMeta {
 
 #[cfg(test)]
 mod tests {
-    use serde::{Deserialize, Serialize};
-    use crate::types::Value;
-    use crate::Model;
+    use std::borrow::Cow;
+    use cherry::types::{ColumnMeta, Row};
+    use crate::db::DatabaseBuilder;
+    use crate::types::{FromRow, Value};
+    use crate::{Error, Model};
     use crate::types::Type;
     
 
@@ -48,14 +50,28 @@ mod tests {
     fn test() {
         let meta = User::name.meta;
         println!("{:?}", meta);
+        let db = DatabaseBuilder::new("").build().unwrap();
+        let u = db.select::<User>().columns(("", User::name)).load().unwrap();
     }
 
 
 
-    #[derive(Serialize, Deserialize)]
+    // #[derive(Serialize, Deserialize)]
     struct Book {
         id: usize,
         title: String,
+    }
+
+    impl FromRow for Book {
+        fn columns() -> Cow<'static, [ColumnMeta]> {
+            todo!()
+        }
+
+        fn from_row(row: &Row) -> cherry::Result<Self> {
+            let val: Value = row.get("book.id").or_else(|_| row.get("id").map_err(|e| Error::ParseError(e.to_string())))?;
+            let id: usize = Type::from_db(val)?;
+            todo!()
+        }
     }
 
 

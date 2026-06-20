@@ -1,4 +1,5 @@
-use crate::core::value::{CondExpr, Value};
+use crate::core::column::expr::SqlExpr;
+use crate::core::value::Value;
 use crate::ops::dsl::QueryContext;
 use crate::types::ColumnMeta;
 use crate::{Error, Result};
@@ -33,19 +34,19 @@ impl Operator {
 pub enum Condition {
     /// Consolidated binary comparison (e.g., col = expr, col > expr).
     /// Drastically reduces the number of AST variants.
-    Compare(ColumnMeta, Operator, CondExpr),
+    Compare(ColumnMeta, Operator, SqlExpr),
 
     IsNull(ColumnMeta),
     IsNotNull(ColumnMeta),
 
-    In(ColumnMeta, Vec<CondExpr>),
-    NotIn(ColumnMeta, Vec<CondExpr>),
-    Between(ColumnMeta, CondExpr, CondExpr),
+    In(ColumnMeta, Vec<SqlExpr>),
+    NotIn(ColumnMeta, Vec<SqlExpr>),
+    Between(ColumnMeta, SqlExpr, SqlExpr),
 
-    Like(ColumnMeta, CondExpr),
-    StartsWith(ColumnMeta, CondExpr),
-    EndsWith(ColumnMeta, CondExpr),
-    Contains(ColumnMeta, CondExpr),
+    Like(ColumnMeta, SqlExpr),
+    StartsWith(ColumnMeta, SqlExpr),
+    EndsWith(ColumnMeta, SqlExpr),
+    Contains(ColumnMeta, SqlExpr),
 
     // Nested logical combinations
     And(Box<Condition>, Box<Condition>),
@@ -145,20 +146,20 @@ impl<'a> SqlWriter<'a> {
     }
 
     /// Resolves an Expression, securely binding values or formatting column projections.
-    fn write_expr(&mut self, expr: CondExpr) -> Result<()> {
+    fn write_expr(&mut self, expr: SqlExpr) -> Result<()> {
         match expr {
-            CondExpr::Column(meta) => self.write_col(&meta),
-            CondExpr::Value(val) => {
+            SqlExpr::Column(meta) => self.write_col(&meta),
+            SqlExpr::Value(val) => {
                 self.sql.push('?');
                 self.params.push(val);
             }
-            CondExpr::Error(e) => return Err(Error::ConversionError(e))
+            SqlExpr::Error(e) => return Err(Error::ConversionError(e))
         }
         Ok(())
     }
 
     /// Handles standard binary comparison operations.
-    fn write_binary(&mut self, col: &ColumnMeta, op: Operator, expr: CondExpr) -> Result<()> {
+    fn write_binary(&mut self, col: &ColumnMeta, op: Operator, expr: SqlExpr) -> Result<()> {
         self.write_col(col);
         self.sql.push_str(op.as_str());
         self.write_expr(expr)?;
@@ -176,7 +177,7 @@ impl<'a> SqlWriter<'a> {
     }
 
     /// Handles IN and NOT IN clauses, preventing syntax errors on empty lists.
-    fn write_in(&mut self, col: &ColumnMeta, exprs: Vec<CondExpr>, is_in: bool) -> Result<()> {
+    fn write_in(&mut self, col: &ColumnMeta, exprs: Vec<SqlExpr>, is_in: bool) -> Result<()> {
         self.write_col(col);
         if exprs.is_empty() {
             // Failsafe for empty `IN ()` arrays to prevent SQL syntax errors.
@@ -197,20 +198,20 @@ impl<'a> SqlWriter<'a> {
     }
 
     /// Advanced wildcard handler supporting native SQLite string concatenation.
-    fn write_wildcard(&mut self, col: &ColumnMeta, expr: CondExpr, prefix: &str, suffix: &str) -> Result<()> {
+    fn write_wildcard(&mut self, col: &ColumnMeta, expr: SqlExpr, prefix: &str, suffix: &str) -> Result<()> {
         self.write_col(col);
         self.sql.push_str(" like ");
 
         match expr {
-            CondExpr::Value(Value::Text(s)) => {
+            SqlExpr::Value(Value::Text(s)) => {
                 self.sql.push('?');
                 self.params.push(Value::Text(format!("{}{}{}", prefix, s, suffix)));
             }
-            CondExpr::Value(val) => {
+            SqlExpr::Value(val) => {
                 self.sql.push('?');
                 self.params.push(val);
             }
-            CondExpr::Column(c) => {
+            SqlExpr::Column(c) => {
                 if !prefix.is_empty() {
                     self.sql.push_str(" '%' || ");
                 }
@@ -219,7 +220,7 @@ impl<'a> SqlWriter<'a> {
                     self.sql.push_str(" || '%' ");
                 }
             }
-            CondExpr::Error(e) => return Err(Error::ConversionError(e)),
+            SqlExpr::Error(e) => return Err(Error::ConversionError(e)),
         }
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::core::column::{SelectItem, SelectedColumns};
+use crate::core::column::selected::{SelectItem, SelectedColumns};
 use crate::core::model::{FromRow, Model};
 use crate::core::row::Row;
 use crate::core::value::Value;

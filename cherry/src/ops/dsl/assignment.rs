@@ -1,17 +1,18 @@
+use crate::core::column::expr::SqlExpr;
 use crate::core::model::ColumnMeta;
-use crate::core::value::{AssignExpr, Value};
+use crate::core::value::Value;
 use crate::{Error, Result};
 
 /// Represents an assignment operation in an `UPDATE` or `ON CONFLICT DO UPDATE` (Upsert) statement.
 #[derive(Debug, Clone)]
 pub enum Assignment {
     /// Standard value assignment.
-    /// Generates: `col = ?`
-    Value(ColumnMeta, AssignExpr),
+    /// Generates: `col = ?` or `col = other_col`
+    Value(ColumnMeta, SqlExpr),
 
     /// Increment (or decrement if the value is negative) assignment.
-    /// Generates: `col = col + ?`
-    Increment(ColumnMeta, AssignExpr),
+    /// Generates: `col = col + ?` or `col = col + other_col`
+    Increment(ColumnMeta, SqlExpr),
 
     /// Upsert conflict resolution leveraging the `excluded` table.
     /// Generates: `col = excluded.col` (No parameter binding required)
@@ -51,18 +52,18 @@ impl<'a> AssignmentWriter<'a> {
     fn write_single(&mut self, assign: &Assignment) -> Result<()> {
         match assign {
             Assignment::Value(col, expr) => {
-                // e.g., column_name = ?
+                // e.g., column_name = 
                 self.sql.push_str(col.column_name);
-                self.sql.push_str(" = ?");
-                self.params.push(Self::take_value(expr.clone())?);
+                self.sql.push_str(" = ");
+                self.write_expr(expr)?;
             }
             Assignment::Increment(col, expr) => {
-                // e.g., column_name = column_name + ?
+                // e.g., column_name = column_name + 
                 self.sql.push_str(col.column_name);
                 self.sql.push_str(" = ");
                 self.sql.push_str(col.column_name);
-                self.sql.push_str(" + ?");
-                self.params.push(Self::take_value(expr.clone())?);
+                self.sql.push_str(" + ");
+                self.write_expr(expr)?;
             }
             Assignment::Excluded(col) => {
                 // e.g., column_name = excluded.column_name
@@ -74,10 +75,28 @@ impl<'a> AssignmentWriter<'a> {
         Ok(())
     }
 
-    fn take_value(expr: AssignExpr) -> Result<Value> {
+    /// Safely evaluates the unified `CondExpr` expression tree.
+    /// This gracefully handles literal values, column references, and poisoned error states.
+    fn write_expr(&mut self, expr: &SqlExpr) -> Result<()> {
         match expr {
-            AssignExpr::Value(v) => Ok(v),
-            AssignExpr::Error(e) => Err(Error::ConversionError(e)),
+            SqlExpr::Column(c) => {
+                // For column-to-column assignments (e.g., `updated_at = created_at`)
+                // Directly append the target column's name without binding any parameters.
+                self.sql.push_str(c.column_name);
+                Ok(())
+            }
+            SqlExpr::Value(v) => {
+                // For literal assignments (e.g., `age = ?`)
+                // Emit a placeholder and push the value into the binding pool.
+                self.sql.push('?');
+                self.params.push(v.clone());
+                Ok(())
+            }
+            SqlExpr::Error(e) => {
+                // Intercept and bubble up any serialization/conversion failures
+                // that occurred during the DSL builder phase.
+                Err(Error::ConversionError(e.clone()))
+            }
         }
     }
 }

@@ -1,4 +1,3 @@
-use crate::types::ColumnMeta;
 use crate::Result;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, Null, ToSql, ToSqlOutput, ValueRef};
 use std::str::from_utf8;
@@ -44,48 +43,6 @@ impl FromSql for Value {
         }
     }
 }
-
-
-#[derive(Debug, Clone)]
-pub enum CondExpr {
-    Column(ColumnMeta),
-    Value(Value),
-    Error(String),
-}
-
-
-impl From<ColumnMeta> for CondExpr {
-    fn from(value: ColumnMeta) -> Self {
-        CondExpr::Column(value)
-    }
-}
-
-impl From<Result<Value>> for CondExpr {
-    fn from(value: Result<Value>) -> Self {
-        match value {
-            Ok(v) => CondExpr::Value(v),
-            Err(e) => CondExpr::Error(e.to_string()),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum AssignExpr {
-    Value(Value),
-    Error(String),
-}
-
-impl From<Result<Value>> for AssignExpr {
-    fn from(value: Result<Value>) -> Self {
-        match value {
-            Ok(v) => AssignExpr::Value(v),
-            Err(e) => AssignExpr::Error(e.to_string()),
-        }
-    }
-}
-
-
-
 
 #[cfg(test)]
 mod tests {

@@ -102,3 +102,18 @@ where
         }
     }
 }
+
+/// Ergonomic bridge allowing JSON columns to directly accept owned Rust types (`T`)
+/// without requiring the user to manually wrap them in `Json(value)`.
+#[cfg(feature = "json")]
+impl<T> IntoSqlExpr<Json<T>> for T
+where
+    T: serde::Serialize,
+{
+    fn into_sql_expr(self) -> SqlExpr {
+        match serde_json::to_string(&self) {
+            Ok(json_str) => SqlExpr::Value(Value::Text(json_str)),
+            Err(e) => SqlExpr::Error(e.to_string()),
+        }
+    }
+}
